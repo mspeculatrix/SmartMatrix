@@ -47,29 +47,29 @@ size_t cmd_idx = 0;
 // HARDWARE INITIALIZATION
 // ==========================================
 void init_hardware() {
-    // 1. Initialize Parallel Port Data Lines (GP0 - GP7)
+    // Initialize Parallel Port Data Lines (GP0 - GP7)
     for (int i = 0; i < 8; i++) {
         gpio_init(i);
         gpio_set_dir(i, GPIO_OUT);
     }
 
-    // 2. Initialize Parallel Control Outputs
+    // Initialize Parallel Control Outputs
     const uint32_t outputs[] = { STROBE_PIN, INIT_PIN, AUTOFEED_PIN, LED1_PIN, LED2_PIN };
     for (uint32_t pin : outputs) {
         gpio_init(pin);
         gpio_set_dir(pin, GPIO_OUT);
     }
 
-    // Set default idle states for Centronics (Strobe is active low, Init is active low)
-    gpio_put(STROBE_PIN, 1);
-    gpio_put(INIT_PIN, 1);
+    // Set default idle states for Centronics
+    gpio_put(STROBE_PIN, 1);        // Active low
+    gpio_put(INIT_PIN, 1);          // Active low
     gpio_put(AUTOFEED_PIN, 0);
 
     // Turn on an LED to indicate boot
     gpio_put(LED1_PIN, 1);
     gpio_put(LED2_PIN, 0);
 
-    // 3. Initialize Parallel Status Inputs
+    // Initialize Parallel Status Inputs
     const uint32_t inputs[] = { BUSY_PIN, ACK_PIN, PAPER_END_PIN, SELECT_PIN, ERROR_PIN };
     for (uint32_t pin : inputs) {
         gpio_init(pin);
@@ -93,22 +93,22 @@ void send_byte_to_printer(uint8_t character) {
     // Heartbeat toggle LED2 during active printing
     gpio_put(LED2_PIN, !gpio_get(LED2_PIN));
 
-    // 1. Block while printer is busy
+    // Block while printer is busy
     while (gpio_get(BUSY_PIN)) {
         tight_loop_contents();
     }
 
-    // 2. Put the data byte directly onto GP0-GP7
+    // Put the data byte directly onto GP0-GP7
     gpio_put_masked(DATA_MASK, character);
 
-    // 3. Setup time: allow logic levels to settle
+    // Setup time: allow logic levels to settle
     sleep_us(1);
 
-    // 4. Drop Strobe low to tell printer data is ready
+    // Drop Strobe low to tell printer data is ready
     gpio_put(STROBE_PIN, 0);
     sleep_us(1); // Minimum strobe width is usually 0.5us
 
-    // 5. Pull Strobe back high
+    // Pull Strobe back high
     gpio_put(STROBE_PIN, 1);
     sleep_us(1); // Hold time
 }
@@ -176,7 +176,8 @@ static err_t tcp_recv_callback(void* arg, struct tcp_pcb* tpcb, struct pbuf* p, 
         for (struct pbuf* q = p; q != NULL; q = q->next) {
             uint8_t* src = (uint8_t*)q->payload;
             for (int i = 0; i < q->len; i++) {
-                // Safely stream network packet bytes into the Core Inter-Core FIFO
+                // Safely stream network packet bytes into the
+                // Core Inter-Core FIFO
                 multicore_fifo_push_blocking(src[i]);
             }
         }
@@ -239,13 +240,15 @@ int main() {
     multicore_launch_core1(core1_entry);
 
     while (true) {
-        // 1. Process data streaming from the host PC over local USB-C Virtual Serial Link
+        // Process data streaming from the host PC over local USB-C Virtual
+        // Serial Link
         int usb_char = getchar_timeout_us(0);
         if (usb_char != PICO_ERROR_TIMEOUT) {
             process_byte((uint8_t)usb_char);
         }
 
-        // 2. Check if Core 1 (Wi-Fi Stack) has deposited network print stream bytes into the FIFO
+        // Check if Core 1 (Wi-Fi Stack) has deposited network print stream
+        // bytes into the FIFO
         if (multicore_fifo_rvalid()) {
             uint32_t network_char = multicore_fifo_pop_blocking();
             process_byte((uint8_t)network_char);

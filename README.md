@@ -1,5 +1,7 @@
 # SMARTMATRIX
 
+## WARNING: This is a work in progress. It's not yet complete. It certainly doesn't work.
+
 Firmware for the Raspberry Pi Pico 2W-based SmartMatrix adapter. This uses the microcontroller to convert serial input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III.
 
 The device is intended to work in two ways:
