@@ -1,3 +1,6 @@
 .DS_Store
 build
 !.vscode/*
+__wifi_creds.h
+prompt.txt
+__DEV_NOTES.md
