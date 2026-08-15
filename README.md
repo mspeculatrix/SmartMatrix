@@ -19,11 +19,11 @@ The hardware device largely consists of the Raspberry Pi Pico 2W, some ICs used 
 
 ## VERSION HISTORY
 
-Dates indicate when the code was merged into main.
+Dates indicate when the dev branch code was merged into main.
 
 ### 0.1 14/08/2026
 
-- Wifi works. It usually connected on the second attempt.
+- Wifi works. It usually connects on the second attempt.
 - Serial via USB works. Why wouldn't it?
 - The direct mode of sending bytes over the serial connection and having them print immediately on the printer works.
 - Nothing else has been tested.
