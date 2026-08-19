@@ -119,8 +119,8 @@ void init_hardware() {
 	// Set default idle signal states (Centronics active-low idle voltages)
 	gpio_put(STROBE_PIN, 1);   // Idle high
 	gpio_put(INIT_PIN, 1);     // Idle high (no reset)
-	gpio_put(AUTOFEED_PIN, 0); // Disabled by default
-	gpio_put(LED1_PIN, 1);     // System power LED ON
+	gpio_put(AUTOFEED_PIN, 1); // Active low; Disabled by default
+	gpio_put(LED1_PIN, 1);     // On, because why not?
 	gpio_put(LED2_PIN, 0);     // Data TX LED OFF
 
 	// IEEE 1284 input status lines
