@@ -43,6 +43,13 @@ The DIP switch setting is ORed with the signal on line 14. So if the DIP switch 
 
 Dates indicate when the dev branch code was merged into main.
 
+### IN PROGRESS
+
+- Changed function of user LEDs.
+  - LED A flashes when data is sent to the printer.
+  - LED B now indicates a successful Wifi connection.
+- Added OLED functions.
+
 ### 1.0 19/08/2026
 
 - Fixed an incorrect default signal setting.

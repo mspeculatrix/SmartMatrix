@@ -35,7 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(SmartMatrix SmartMatrix.cpp )
+add_executable(
+    SmartMatrix SmartMatrix.cpp
+    ssd1306_mini.c
+)
 
 pico_set_program_name(SmartMatrix "SmartMatrix")
 pico_set_program_version(SmartMatrix "0.1")
@@ -55,7 +58,7 @@ target_include_directories(SmartMatrix PRIVATE
 # We group all libraries into a single target_link_libraries block for cleanliness.
 target_link_libraries(SmartMatrix
         pico_stdlib             # Standard library (GPIO, sleeps, etc.)
-        pico_multicore          # Required for launching and communicating with Core 1
+        pico_multicore          # Required for launching/ communicating with Core 1
         hardware_i2c            # Required for the future OLED display logic
 
         # This library provides the Wi-Fi drivers AND the lwIP TCP/IP stack.

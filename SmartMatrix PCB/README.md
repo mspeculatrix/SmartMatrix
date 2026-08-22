@@ -23,7 +23,7 @@ The LEDs on board the SmartMatrix are:
 | LABEL | SCHEMATIC | COLOUR | DESCRIPTION |
 | :---: | :-------: | :----: | ----------- |
 | A | D1 | YELLOW | User LED A |
-| B | D2 | BLUE | User LED B |
+| B | D2 | BLUE | Wifi LED |
 | BUSY | D3 | YELLOW | Busy |
 | ERR | D4 | RED | Error |
 | PE | D5 | RED | Paper out |
