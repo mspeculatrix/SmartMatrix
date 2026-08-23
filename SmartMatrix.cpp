@@ -18,7 +18,7 @@
 #include "hardware/i2c.h"
 #include "lwip/tcp.h"
 #include "__wifi_creds.h" // Wifi credentials (WIFI_SSID, WIFI_PASSWORD)
-#include "ssd1306_mini.h"
+#include "pico_ssd1306_basic.h"
 
  // ============================================================================
  // CONFIGURATION CONSTANTS
@@ -102,8 +102,18 @@ enum ParserState {
 	STATE_COMMAND   /**< Command intercept mode: bytes captured into buffer */
 };
 
+enum AutoFeed {
+	AF_ON,
+	AF_OFF
+};
+
 /** @brief In-band command accumulation buffer */
 char cmd_buffer[256];
+
+/** @brief String to hold IP address */
+char ip_buf[20];
+
+uint8_t autofeed_cfg = AF_OFF;				// Active low; Disabled by default
 
 // Telemetry State
 static uint32_t total_job_bytes = 0;
@@ -143,7 +153,7 @@ void init_hardware() {
 	// Set default idle signal states (Centronics active-low idle voltages)
 	gpio_put(STROBE_PIN, 1);        // Idle high
 	gpio_put(INIT_PIN, 1);          // Idle high (no reset)
-	gpio_put(AUTOFEED_PIN, 1);      // Active low; Disabled by default
+	gpio_put(AUTOFEED_PIN, autofeed_cfg);
 	gpio_put(ACTIVITY_LED_PIN, 1);  // On, but probably not long enough to see
 	gpio_put(WIFI_LED_PIN, 0);      // Off by default
 
@@ -173,42 +183,50 @@ void init_display() {
 	ssd1306_init(&display, I2C_PORT);
 
 	ssd1306_clear(&display);
-	ssd1306_draw_string(&display, 0, 0, "SMARTMATRIX");
-	ssd1306_draw_string(&display, 0, 16, "BOOTING...");
+	ssd1306_printstr(&display, 0, 0, "SMARTMATRIX");
+	ssd1306_printstr(&display, 0, 16, "BOOTING...");
 	ssd1306_show(&display);
 }
 
 /**
  * @brief Renders network and job status onto the OLED screen (Core 0)
  */
-void update_display_status(const char* ip_str, const char* status_str) {
+void display_activity(const char* header, const char* activity, const char* status) {
 	ssd1306_clear(&display);
-	ssd1306_draw_string(&display, 0, 0, "SMARTMATRIX");
-	ssd1306_draw_string(&display, 0, 16, "IP:");
-	ssd1306_draw_string(&display, 24, 16, ip_str);
-	ssd1306_draw_string(&display, 0, 36, "STATUS:");
-	ssd1306_draw_string(&display, 0, 48, status_str);
+	ssd1306_printstr_double(&display, 0, 0, header);
+	ssd1306_println(&display, 3, activity);
+	ssd1306_println(&display, 7, status);
 	ssd1306_show(&display);
 }
 
 /**
  * @brief Renders printing telemetry onto the OLED screen (Core 0)
  */
-void update_display_telemetry(const char* ip_str, bool active, uint32_t bytes) {
+void display_status(bool active, uint32_t bytes) {
 	ssd1306_clear(&display);
-	ssd1306_draw_string(&display, 0, 0, "SMARTMATRIX");
-	ssd1306_draw_string(&display, 0, 16, "IP:");
-	ssd1306_draw_string(&display, 24, 16, ip_str);
 
 	if (active) {
-		ssd1306_draw_string(&display, 0, 28, "STATE: PRINTING");
+		ssd1306_printstr_double(&display, 0, 0, "PRINTING");
 	} else {
-		ssd1306_draw_string(&display, 0, 28, "STATE: IDLE / READY");
+		ssd1306_printstr_double(&display, 0, 0, "IDLE/READY");
 	}
 
-	char count_buf[24];
-	snprintf(count_buf, sizeof(count_buf), "BYTES: %lu", (unsigned long)bytes);
-	ssd1306_draw_string(&display, 0, 44, count_buf);
+	ssd1306_println(&display, 3, "BYTES:");
+	char count_buf[10];
+	snprintf(count_buf, sizeof(count_buf), "%lu", (unsigned long)bytes);
+	ssd1306_printstr_double(&display, 48, 24, count_buf);
+
+	char stat_msg[22];
+
+	if (autofeed_cfg = AF_ON) {
+		snprintf(stat_msg, sizeof(stat_msg), "%s", "AUTOFEED");
+	} else {
+		snprintf(stat_msg, sizeof(stat_msg), "%s", "AF off");
+	}
+
+	ssd1306_println(&display, 5, stat_msg);
+
+	ssd1306_println(&display, 7, ip_buf);
 
 	ssd1306_show(&display);
 }
@@ -285,6 +303,12 @@ void handle_command(const char* buffer, size_t length) {
 		gpio_put(INIT_PIN, 1);
 		gpio_put(ACTIVITY_LED_PIN, 0);
 		printf("MSG:PRINTER_RESET_EXECUTED\n");
+	} else if (strncmp(buffer, "AF_ON", length) == 0) {
+		autofeed_cfg = AF_ON;
+		gpio_put(AUTOFEED_PIN, autofeed_cfg);
+	} else if (strncmp(buffer, "AF_OFF", length) == 0) {
+		autofeed_cfg = AF_OFF;
+		gpio_put(AUTOFEED_PIN, autofeed_cfg);
 	} else {
 		printf("ERR:UNKNOWN_COMMAND\n");
 	}
@@ -410,19 +434,19 @@ static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err) {
 /**
  * @brief Processes incoming telemetry messages from Core 1 on Core 0.
  */
-void process_telemetry_message(uint32_t msg, const char* ip_str) {
+void process_telemetry_message(uint32_t msg) {
 	uint32_t msg_type = msg & TELEMETRY_MASK_TYPE;
 	uint32_t payload = msg & TELEMETRY_MASK_DATA;
 
 	switch (msg_type) {
 		case TELEMETRY_JOB_START:
-			update_display_telemetry(ip_str, true, 0);
+			display_status(true, 0);
 			break;
 		case TELEMETRY_BYTE_COUNT:
-			update_display_telemetry(ip_str, true, payload);
+			display_status(true, payload);
 			break;
 		case TELEMETRY_JOB_END:
-			update_display_telemetry(ip_str, false, payload);
+			display_status(false, payload);
 			break;
 		default:
 			break;
@@ -449,6 +473,8 @@ int main() {
 	// Initialise hardware lines and I2C peripheral first
 	init_hardware();
 	init_display();
+
+	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", "0.0.0.0");
 
 	printf("\nMSG:SMARTMATRIX_INITIALISED_Core_0\n");
 
@@ -479,7 +505,7 @@ int main() {
 		retries++;
 		char boot_msg[24];
 		snprintf(boot_msg, sizeof(boot_msg), "CONNECTING (%d/5)...", retries);
-		update_display_status("0.0.0.0", boot_msg);
+		display_activity("WIFI", boot_msg, "0.0.0.0");
 		if (retries > 1) {
 			printf("MSG:WIFI_RETRY_ATTEMPT_%d/%d\n", retries, WIFI_MAX_TRIES);
 			gpio_put(WIFI_LED_PIN, 0);
@@ -497,16 +523,15 @@ int main() {
 
 	if (err != 0) {
 		printf("ERR:FATAL_WIFI_CONNECTION_FAILED_%d\n", err);
-		update_display_status("NO IP", "WIFI FAILED");
+		display_activity("WIFI", "NO IP", "WIFI FAILED");
 		gpio_put(WIFI_LED_PIN, 0); // Off to show failure to connect
 		return -1;
 	}
 
-	char ip_buf[16];
-	snprintf(ip_buf, sizeof(ip_buf), "%s", ip4addr_ntoa(netif_ip4_addr(netif)));
+	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", ip4addr_ntoa(netif_ip4_addr(netif)));
 	printf("MSG:WIFI_CONNECTED\n");
 	printf("MSG:IP_ADDRESS_%s\n", ip4addr_ntoa(netif_ip4_addr(netif)));
-	update_display_telemetry(ip_buf, false, 0);
+	display_status(false, 0);
 
 	// Flash LED to show success
 	for (uint8_t i = 0; i < 5; i++) {
@@ -546,7 +571,7 @@ int main() {
 
 			// Core 0 processes FIFO messages tagged as TELEMETRY (Bit 31 = 1)
 			if ((msg & 0x80000000) == FIFO_TAG_TELEMETRY) {
-				process_telemetry_message(msg, ip_buf);
+				process_telemetry_message(msg);
 			}
 		}
 

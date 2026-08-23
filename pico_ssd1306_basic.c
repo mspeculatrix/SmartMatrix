@@ -5,10 +5,10 @@
 
 #include <stdint.h>
 #include <string.h>
-#include "ssd1306_mini.h"
+#include "pico_ssd1306_basic.h"
 
  /**
-  * @brief x7 ASCII font lookup table (character codes 0x20 through 0x7E).
+  * @brief 5x7 ASCII font lookup table (character codes 0x20 - 0x7E).
   *
   * Each array row contains 5 column bytes defining a single
   * ASCII character glyph.
@@ -152,15 +152,24 @@ void ssd1306_clear(ssd1306_t* disp) {
 	memset(disp->buffer, 0, sizeof(disp->buffer));
 }
 
+void ssd1306_clearln(ssd1306_t* disp, int line) {
+	if (line < 0 || line >= NUM_LINES) return; // bounds check
+	int start_idx = line * DISP_WIDTH;
+	int end_idx = start_idx + DISP_WIDTH;
+	for (int i = start_idx; i < end_idx; i++) {
+		disp->buffer[i] = 0;
+	}
+}
+
 static inline void ssd1306_draw_pixel(ssd1306_t* disp, int x, int y,
 	bool turn_on) {
-	if (x < 0 || x >= 128 || y < 0 || y >= 64) {
+	if (x < 0 || x >= DISP_WIDTH || y < 0 || y >= DISP_HEIGHT) {
 		return; // Bounds check
 	}
 
-	int page = y / 8;
-	int bit = y % 8;
-	int index = page * 128 + x;
+	int page = y / LINE_HEIGHT;
+	int bit = y % LINE_HEIGHT;
+	int index = page * DISP_WIDTH + x;
 
 	if (turn_on) {
 		disp->buffer[index] |= (1 << bit);
@@ -169,16 +178,22 @@ static inline void ssd1306_draw_pixel(ssd1306_t* disp, int x, int y,
 	}
 }
 
-void ssd1306_draw_string(ssd1306_t* disp, int x, int y, const char* str) {
-	ssd1306_draw_string_scaled(disp, x, y, str, SSD1306_FONT_NORMAL);
+void ssd1306_println(ssd1306_t* disp, uint8_t line, const char* str) {
+	ssd1306_clearln(disp, line);
+	int y = line * LINE_HEIGHT;
+	ssd1306_printstr_scaled(disp, 0, y, str, SSD1306_FONT_NORMAL);
 }
 
-void ssd1306_draw_string_double(ssd1306_t* disp, int x, int y,
+void ssd1306_printstr(ssd1306_t* disp, int x, int y, const char* str) {
+	ssd1306_printstr_scaled(disp, x, y, str, SSD1306_FONT_NORMAL);
+}
+
+void ssd1306_printstr_double(ssd1306_t* disp, int x, int y,
 	const char* str) {
-	ssd1306_draw_string_scaled(disp, x, y, str, SSD1306_FONT_DOUBLE);
+	ssd1306_printstr_scaled(disp, x, y, str, SSD1306_FONT_DOUBLE);
 }
 
-void ssd1306_draw_string_scaled(ssd1306_t* disp, int x, int y, const char* str,
+void ssd1306_printstr_scaled(ssd1306_t* disp, int x, int y, const char* str,
 	uint8_t scale) {
 	if (scale < SSD1306_FONT_NORMAL) scale = SSD1306_FONT_NORMAL;
 	if (scale > SSD1306_FONT_DOUBLE) scale = SSD1306_FONT_DOUBLE;
@@ -194,32 +209,28 @@ void ssd1306_draw_string_scaled(ssd1306_t* disp, int x, int y, const char* str,
 		uint8_t idx = c - 0x20; // Index into 0x20..0x7E font table
 
 		// Iterate across 5 horizontal font columns
-		for (int col = 0; col < 5; col++) {
+		for (int col = 0; col < (CHAR_WIDTH); col++) {
 			uint8_t line = font5x7[idx][col];
 
 			// Iterate down 7 vertical bits of the column byte
-			for (int bit = 0; bit < 7; bit++) {
+			for (int bit = 0; bit < CHAR_HEIGHT; bit++) {
 				bool pixel_active = (line & (1 << bit)) != 0;
 
-				if (pixel_active) {
-					// Render scaled pixel blocks
-					for (int sx = 0; sx < scale; sx++) {
-						for (int sy = 0; sy < scale; sy++) {
-							ssd1306_draw_pixel(
-								disp,
-								x + (col * scale) + sx,
-								y + (bit * scale) + sy,
-								true
-							);
-						}
+				for (int sx = 0; sx < scale; sx++) {
+					for (int sy = 0; sy < scale; sy++) {
+						ssd1306_draw_pixel(
+							disp,
+							x + (col * scale) + sx,
+							y + (bit * scale) + sy,
+							pixel_active
+						);
 					}
 				}
 			}
 		}
 
 		// Advance horizontal position
-		// (5 font columns + 1 pixel padding) * scale
-		x += (6 * scale);
+		x += ((CHAR_WIDTH + 1) * scale);
 	}
 }
 

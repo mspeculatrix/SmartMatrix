@@ -13,7 +13,19 @@ An I2C port is configured but not yet used. The aim is to attach a small OLED di
 
 ## THE HARDWARE
 
-The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, some ICs used as level shifters and buffers/drivers, a 25-pin D-sub socket for the printer cable and a few blinkenlights.
+The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, some ICs used as level shifters and buffers/drivers, a 25-pin D-sub socket for the printer cable, a reset  button and a few blinkenlights.
+
+## OLED
+
+| Line | Function    |
+|:----:| ----------- |
+| 0, 1 | State       |
+| 2    |             |
+| 3    | Bytes: num  |
+| 4    |        num  |
+| 5    | AF setting  |
+| 6    |             |
+| 7    | IP address  |
 
 ### Signals
 
@@ -48,11 +60,12 @@ Dates indicate when the dev branch code was merged into main.
 - Changed function of user LEDs.
   - LED A flashes when data is sent to the printer.
   - LED B now indicates a successful Wifi connection.
-- Added OLED functions.
+- Added OLED functions & 'telemetry' messages via SIO FIFO.
 
 ### 1.0 19/08/2026
 
 - Fixed an incorrect default signal setting.
+- Tested printing over network via socket connection - works a treat.
 
 ### 0.1 14/08/2026
 

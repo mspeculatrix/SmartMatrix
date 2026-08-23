@@ -1,6 +1,11 @@
 /**
  * @file ssd1306_mini.h
  * @brief Minimal SSD1306 SSD1306 OLED library for Pico C/C++ SDK.
+ *
+ * @author Machina Speculatrix https://medium.com/machina-speculatrix
+ *
+ * This is just an interim version of this library. For the definitive
+ * version see: https://github.com/mspeculatrix/pico_oled
  */
 
 #ifndef __SSD1306_MINI_H__
@@ -17,6 +22,14 @@
 #define SSD1306_I2C_ADDR 0x3C
 #define SSD1306_FONT_NORMAL 1
 #define SSD1306_FONT_DOUBLE 2
+
+#define DISP_WIDTH 128
+#define DISP_HEIGHT 64
+#define LINE_HEIGHT 8
+#define NUM_LINES 8
+
+#define CHAR_WIDTH 5 	// Width in pixels of characters (normal size)
+#define CHAR_HEIGHT 7 	// Height in pixels of characters (normal size)
 
 /**
  * @brief Display instance holding peripheral bindings and memory buffer.
@@ -48,6 +61,13 @@ extern "C" {
 	void ssd1306_clear(ssd1306_t* disp);
 
 	/**
+	 * @brief Clear a line's worth of pixel from buffer
+	 * @param disp Pointer to the initialized display context structure.
+	 * @param line Line number (0-7)
+	 */
+	void ssd1306_clearln(ssd1306_t* disp, int line);
+
+	/**
 	 * @brief Sends a single control command byte to the SSD1306 controller via I2C.
 	 *
 	 * @param disp Pointer to the initialized display context structure.
@@ -66,21 +86,29 @@ extern "C" {
 	static inline void ssd1306_draw_pixel(ssd1306_t* disp, int x, int y,
 		bool turn_on);
 
-	/* Wrapper functions to ssd1306_draw_string_scaled */
-	void ssd1306_draw_string(ssd1306_t* disp, int x, int y, const char* str);
-	void ssd1306_draw_string_double(ssd1306_t* disp, int x, int y,
+	/**
+	 * @brief Print a line of text starting at X position 0
+	 * @param disp Pointer to display context.
+	 * @param line Line number (0-7)
+	 * @param str Null-terminated string to draw.
+	 */
+	void ssd1306_println(ssd1306_t* disp, uint8_t line, const char* str);
+
+	/* Wrapper functions to ssd1306_printstr_scaled */
+	void ssd1306_printstr(ssd1306_t* disp, int x, int y, const char* str);
+	void ssd1306_printstr_double(ssd1306_t* disp, int x, int y,
 		const char* str);
 
 	/**
-	 * @brief Draws ASCII text using full 5x7 font with selectable size scaling.
+	 * @brief Prints text using 5x7 font with selectable size scaling.
 	 *
 	 * @param disp Pointer to display context.
 	 * @param x Horizontal pixel position (0 to 127).
 	 * @param y Vertical pixel position (0 to 63).
-	 * @param str Null-terminated string to draw.
+	 * @param str Null-terminated string to print.
 	 * @param scale Scaling factor (1 = standard 5x7 glyphs, 2 = double-size 10x14).
 	 */
-	void ssd1306_draw_string_scaled(ssd1306_t* disp, int x, int y,
+	void ssd1306_printstr_scaled(ssd1306_t* disp, int x, int y,
 		const char* str, uint8_t scale);
 
 	/**
