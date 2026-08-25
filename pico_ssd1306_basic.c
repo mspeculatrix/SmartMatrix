@@ -1,5 +1,5 @@
 /**
- * @file ssd1306_mini.c
+ * @file pico_ssd1306_basic.c
  * @brief Basic driver for an SSD1306 OLED display using the Pico C SDK.
  */
 

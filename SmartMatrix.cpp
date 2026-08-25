@@ -17,12 +17,14 @@
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "lwip/tcp.h"
-#include "__wifi_creds.h" // Wifi credentials (WIFI_SSID, WIFI_PASSWORD)
 #include "pico_ssd1306_basic.h"
+#include "__wifi_creds.h" // Wifi credentials (WIFI_SSID, WIFI_PASSWORD)
 
  // ============================================================================
  // CONFIGURATION CONSTANTS
  // ============================================================================
+
+#define VERSION_STR "Version 0.9.0"
 
 /** @brief Standard JetDirect / RAW TCP printing port */
 #define TCP_PORT 9100
@@ -79,16 +81,16 @@
 
 // --- FIFO PROTOCOL DISCRIMINATORS
 // These help disambiguate Core 0 vs Core 1 messages
-#define FIFO_TAG_DATA        0x00000000 // Core 0 -> 1: Print byte (Bit 31=0)
-#define FIFO_TAG_TELEMETRY   0x80000000 // Core 1 -> 0: Telemetry (Bit 31 = 1)
+#define FIFO_TAG_DATA		0x00000000 // Core 0 -> 1: Print byte (Bit 31=0)
+#define FIFO_TAG_MSG 		0x80000000 // Core 1 -> 0: Message (Bit 31 = 1)
 
-// --- TELEMETRY PROTOCOL (Core 1 -> Core 0) ---
-#define TELEMETRY_MASK_TYPE    0x7F000000
-#define TELEMETRY_MASK_DATA    0x00FFFFFF
+// --- FIFO MESSAGE PROTOCOL (Core 1 -> Core 0) ---
+#define FIFO_MSG_MASK_TYPE	0x7F000000 // Mask to extract type (msg or data)
+#define FIFO_MSG_MASK_DATA	0x00FFFFFF // Mask to extract data
 
-#define TELEMETRY_JOB_START    0x01000000
-#define TELEMETRY_JOB_END      0x02000000
-#define TELEMETRY_BYTE_COUNT   0x03000000
+#define FIFO_MSG_JOB_START	0x01000000
+#define FIFO_MSG_JOB_END	0x02000000
+#define FIFO_MSG_BYTE_COUNT	0x03000000
 
 // =============================================================================
 // GLOBAL STATE & ENUMS
@@ -102,6 +104,23 @@ enum ParserState {
 	STATE_COMMAND   /**< Command intercept mode: bytes captured into buffer */
 };
 
+enum SystemStatus {
+	STATUS_IDLE,
+	STATUS_PRINTING,
+	STATUS_ERROR
+};
+
+uint8_t system_status = 0;
+char* system_status_msg[] = { "IDLE/READY", "PRINTING", "ERROR" };
+static uint8_t current_err_state = ERR_NONE;
+
+enum ErrorState {
+	ERR_NONE,
+	ERR_OFFLINE,
+	ERR_GEN,
+	ERR_PE
+};
+
 enum AutoFeed {
 	AF_ON,
 	AF_OFF
@@ -113,9 +132,10 @@ char cmd_buffer[256];
 /** @brief String to hold IP address */
 char ip_buf[20];
 
+/** @brief Autofeed configuration */
 uint8_t autofeed_cfg = AF_OFF;				// Active low; Disabled by default
 
-// Telemetry State
+// FIFO message State
 static uint32_t total_job_bytes = 0;
 static bool is_printing = false;
 
@@ -181,10 +201,10 @@ void init_hardware() {
 void init_display() {
 	// Updated call signature for ssd1306_mini
 	ssd1306_init(&display, I2C_PORT);
-
 	ssd1306_clear(&display);
-	ssd1306_printstr(&display, 0, 0, "SMARTMATRIX");
-	ssd1306_printstr(&display, 0, 16, "BOOTING...");
+	ssd1306_printstr_double(&display, 0, 0, "BOOTING...");
+	ssd1306_println(&display, 3, "SMARTMATRIX");
+	ssd1306_println(&display, 5, VERSION_STR);
 	ssd1306_show(&display);
 }
 
@@ -200,25 +220,42 @@ void display_activity(const char* header, const char* activity, const char* stat
 }
 
 /**
- * @brief Renders printing telemetry onto the OLED screen (Core 0)
+ * @brief Prints FIFO message contents onto the OLED screen (Core 0)
  */
-void display_status(bool active, uint32_t bytes) {
+void display_status(uint8_t state, uint32_t data) {
 	ssd1306_clear(&display);
+	bool show_bytes = false;
 
-	if (active) {
+	if (state == STATUS_PRINTING) {
 		ssd1306_printstr_double(&display, 0, 0, "PRINTING");
-	} else {
+		show_bytes = true;
+	} else if (state == STATUS_IDLE) {
 		ssd1306_printstr_double(&display, 0, 0, "IDLE/READY");
+		show_bytes = true;
+	} else if (state == STATUS_ERROR) {
+		switch (data) {
+			case ERR_OFFLINE:
+				ssd1306_printstr_double(&display, 0, 0, "OFFLINE");
+				break;
+			case ERR_GEN:
+				ssd1306_printstr_double(&display, 0, 0, "ERROR");
+				break;
+			case ERR_PE:
+				ssd1306_printstr_double(&display, 0, 0, "PAPER OUT");
+				break;
+		}
 	}
 
-	ssd1306_println(&display, 3, "BYTES:");
-	char count_buf[10];
-	snprintf(count_buf, sizeof(count_buf), "%lu", (unsigned long)bytes);
-	ssd1306_printstr_double(&display, 48, 24, count_buf);
+	if (show_bytes) {
+		ssd1306_println(&display, 3, "BYTES:");
+		char count_buf[10];
+		snprintf(count_buf, sizeof(count_buf), "%lu", (unsigned long)data);
+		ssd1306_printstr_double(&display, 48, 24, count_buf);
+	}
 
 	char stat_msg[22];
 
-	if (autofeed_cfg = AF_ON) {
+	if (autofeed_cfg == AF_ON) {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AUTOFEED");
 	} else {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AF off");
@@ -232,10 +269,10 @@ void display_status(bool active, uint32_t bytes) {
 }
 
 /**
- * @brief Sends telemetry message over FIFO from Core 1 to Core 0
+ * @brief Sends messages over FIFO from Core 1 to Core 0
  */
-inline void send_telemetry(uint32_t type, uint32_t payload) {
-	uint32_t msg = FIFO_TAG_TELEMETRY | type | (payload & TELEMETRY_MASK_DATA);
+inline void send_fifo_msg(uint32_t type, uint32_t payload) {
+	uint32_t msg = FIFO_TAG_MSG | type | (payload & FIFO_MSG_MASK_DATA);
 	multicore_fifo_push_blocking(msg);
 }
 
@@ -257,23 +294,28 @@ inline void send_print_byte_to_core1(uint8_t byte) {
  */
 void send_byte_to_printer(uint8_t character) {
 	// Toggle LED to indicate bit-banging activity
-	gpio_put(ACTIVITY_LED_PIN, !gpio_get(ACTIVITY_LED_PIN));
+	gpio_put(ACTIVITY_LED_PIN, 1);
 
-	// Wait blocking until the printer signals it is ready to receive data
-	while (gpio_get(BUSY_PIN)) {
+	// Block until printer is READY: Signals conditions must be:
+	// - BUSY   - LOW
+	// - SELECT - HIGH
+	// - /ERROR - HIGH
+	// - PE     - LOW
+	while (gpio_get(BUSY_PIN) || !gpio_get(SELECT_PIN)
+		|| gpio_get(PAPER_END_PIN) || !gpio_get(ERROR_PIN)) {
 		tight_loop_contents(); // Microcontroller spinlock hint
 	}
 
 	// Write byte to lower 8 pins (GPIO 0-7) using atomic bit-masking
 	gpio_put_masked(DATA_MASK, (uint32_t)character);
-
 	// IEEE 1284 strobe pulse setup time
 	sleep_us(HOLD_DURATION);
-	gpio_put(STROBE_PIN, 0);                // Assert STROBE (active low)
+	gpio_put(STROBE_PIN, 0); // Assert STROBE
 	sleep_us(STROBE_DURATION);
-	gpio_put(STROBE_PIN, 1);                // De-assert STROBE
-	sleep_us(HOLD_DURATION);                // Hold data post-edge
-	gpio_put(ACTIVITY_LED_PIN, 0);          // Ensure off when done
+	gpio_put(STROBE_PIN, 1); // De-assert STROBE
+	sleep_us(HOLD_DURATION);
+
+	gpio_put(ACTIVITY_LED_PIN, 0);
 }
 
 /**
@@ -284,17 +326,8 @@ void send_byte_to_printer(uint8_t character) {
  */
 void handle_command(const char* buffer, size_t length) {
 	if (strncmp(buffer, "STATUS", length) == 0) {
-		// Sample physical status input pins
-		bool pe = gpio_get(PAPER_END_PIN);
-		bool err = !gpio_get(ERROR_PIN); // Error pin is active low
-
-		if (pe) {
-			printf("ERR:PAPER_OUT\n");
-		} else if (err) {
-			printf("ERR:PRINTER_FAULT\n");
-		} else {
-			printf("MSG:PRINTER_READY\n");
-		}
+		printf(system_status_msg[system_status]);
+		printf("\n");
 	} else if (strncmp(buffer, "RESET", length) == 0) {
 		// Assert hardware initialise pulse
 		gpio_put(ACTIVITY_LED_PIN, 1);
@@ -333,14 +366,14 @@ void process_byte(uint8_t byte) {
 		} else if (byte >= 0x07) {
 			if (!is_printing) {
 				is_printing = true;
-				send_telemetry(TELEMETRY_JOB_START, 0);
+				send_fifo_msg(FIFO_MSG_JOB_START, 0);
 			}
 
 			send_byte_to_printer(byte);
 			total_job_bytes++;
 
 			if (total_job_bytes % 100 == 0) {
-				send_telemetry(TELEMETRY_BYTE_COUNT, total_job_bytes);
+				send_fifo_msg(FIFO_MSG_BYTE_COUNT, total_job_bytes);
 			}
 		}
 	} else if (current_state == STATE_COMMAND) {
@@ -432,25 +465,67 @@ static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err) {
 }
 
 /**
- * @brief Processes incoming telemetry messages from Core 1 on Core 0.
+ * @brief Processes incoming FIFO messages from Core 1 on Core 0.
  */
-void process_telemetry_message(uint32_t msg) {
-	uint32_t msg_type = msg & TELEMETRY_MASK_TYPE;
-	uint32_t payload = msg & TELEMETRY_MASK_DATA;
+void process_fifo_message(uint32_t msg) {
+	uint32_t msg_type = msg & FIFO_MSG_MASK_TYPE;
+	uint32_t payload = msg & FIFO_MSG_MASK_DATA;
 
 	switch (msg_type) {
-		case TELEMETRY_JOB_START:
-			display_status(true, 0);
+		case FIFO_MSG_JOB_START:
+			system_status = STATUS_PRINTING;
+			display_status(STATUS_PRINTING, 0);
 			break;
-		case TELEMETRY_BYTE_COUNT:
-			display_status(true, payload);
+		case FIFO_MSG_BYTE_COUNT:
+			display_status(STATUS_PRINTING, payload);
 			break;
-		case TELEMETRY_JOB_END:
-			display_status(false, payload);
+		case FIFO_MSG_JOB_END:
+			system_status = STATUS_IDLE;
+			display_status(STATUS_IDLE, payload);
 			break;
 		default:
 			break;
 	}
+}
+
+void poll_printer_status(void) {
+	uint8_t new_err = check_for_error();
+
+	// Only update if state actually changes
+	if (new_err != current_err_state) {
+		current_err_state = new_err;
+
+		if (current_err_state != ERR_NONE) {
+			system_status = STATUS_ERROR;
+			display_status(STATUS_ERROR, current_err_state);
+		} else {
+			// Error cleared: restore previous state
+			if (is_printing) {
+				system_status = STATUS_PRINTING;
+				display_status(STATUS_PRINTING, total_job_bytes);
+			} else {
+				system_status = STATUS_IDLE;
+				display_status(STATUS_IDLE, 0);
+			}
+		}
+	}
+}
+
+uint8_t check_for_error(void) {
+	uint8_t err_state = ERR_NONE;
+	// Check SELECT, /ERROR and PE signals, in that order
+	if (gpio_get(SELECT_PIN) == 0) {	// Printer is offline
+		err_state = ERR_OFFLINE;
+	}
+
+	if (gpio_get(ERROR_PIN) == 0) {		// Printer is indicating an error
+		err_state = ERR_GEN;
+	}
+
+	if (gpio_get(PAPER_END_PIN) == 1) {	// Paper end condition
+		err_state = ERR_PE;
+	}
+	return err_state;
 }
 
 // ============================================================================
@@ -531,7 +606,7 @@ int main() {
 	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", ip4addr_ntoa(netif_ip4_addr(netif)));
 	printf("MSG:WIFI_CONNECTED\n");
 	printf("MSG:IP_ADDRESS_%s\n", ip4addr_ntoa(netif_ip4_addr(netif)));
-	display_status(false, 0);
+	display_status(STATUS_IDLE, 0);
 
 	// Flash LED to show success
 	for (uint8_t i = 0; i < 5; i++) {
@@ -556,7 +631,7 @@ int main() {
 	// Launch dedicated printer worker core (Core 1)
 	multicore_launch_core1(core1_entry);
 
-	// Core 0 execution loop: handles USB CDC serial backup input and telemetry
+	// Core 0 execution loop: handles USB CDC serial backup input and FIFO msgs
 	while (true) {
 		// Non-blocking poll for local USB Serial terminal bytes
 		int usb_char = getchar_timeout_us(0);
@@ -565,15 +640,17 @@ int main() {
 			send_print_byte_to_core1((uint8_t)usb_char);
 		}
 
-		// Telemetry processing from Core 1
+		// FIFO message processing from Core 1
 		if (multicore_fifo_rvalid()) {
 			uint32_t msg = multicore_fifo_pop_blocking();
 
-			// Core 0 processes FIFO messages tagged as TELEMETRY (Bit 31 = 1)
-			if ((msg & 0x80000000) == FIFO_TAG_TELEMETRY) {
-				process_telemetry_message(msg);
+			// Core 0 processes FIFO messages tagged as messages (Bit 31 = 1)
+			if ((msg & 0x80000000) == FIFO_TAG_MSG) {
+				process_fifo_message(msg);
 			}
 		}
+
+		poll_printer_status();
 
 		sleep_ms(1); // Yield execution slot
 	}

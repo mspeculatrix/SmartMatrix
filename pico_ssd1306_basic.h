@@ -1,11 +1,12 @@
 /**
- * @file ssd1306_mini.h
+ * @file pico_ssd1306_basic.h
  * @brief Minimal SSD1306 SSD1306 OLED library for Pico C/C++ SDK.
  *
  * @author Machina Speculatrix https://medium.com/machina-speculatrix
  *
- * This is just an interim version of this library. For the definitive
- * version see: https://github.com/mspeculatrix/pico_oled
+ * This is just an interim version of this library for use with the
+ * SmartMatrix project.
+ * For the definitive version see: https://github.com/mspeculatrix/pico_oled
  */
 
 #ifndef __SSD1306_MINI_H__
@@ -35,8 +36,8 @@
  * @brief Display instance holding peripheral bindings and memory buffer.
  */
 typedef struct {
-	i2c_inst_t* i2c;      /**< Pointer to initialized Pico I2C hardware instance */
-	uint8_t buffer[1024]; /**< 128x64 display frame buffer (8 pages x 128 bytes) */
+	i2c_inst_t* i2c;      /**< Pointer to Pico I2C hardware instance */
+	uint8_t buffer[1024]; /**< 128x64 display frame buffer (8pgs x 128 bytes) */
 } ssd1306_t;
 
 #ifdef __cplusplus
@@ -55,8 +56,10 @@ extern "C" {
 	void ssd1306_init(ssd1306_t* disp, i2c_inst_t* i2c);
 
 	/**
-	 * @brief Clears the 1,024-byte RAM buffer (does not flush to physical screen).
+	 * @brief Clears the 1024-byte RAM buffer.
 	 * @param disp Pointer to display context.
+	 *
+	 * Note: Does not flush to physical screen.
 	 */
 	void ssd1306_clear(ssd1306_t* disp);
 
@@ -68,7 +71,7 @@ extern "C" {
 	void ssd1306_clearln(ssd1306_t* disp, int line);
 
 	/**
-	 * @brief Sends a single control command byte to the SSD1306 controller via I2C.
+	 * @brief Sends a single command byte to the SSD1306 controller via I2C.
 	 *
 	 * @param disp Pointer to the initialized display context structure.
 	 * @param cmd The command byte to transmit.
@@ -76,12 +79,12 @@ extern "C" {
 	static void ssd1306_cmd(ssd1306_t* disp, uint8_t cmd);
 
 	/**
-	 * @brief Draws individual pixels directly into the display RAM frame buffer.
+	 * @brief Draws individual pixels directly into display RAM frame buffer.
 	 *
 	 * @param disp Pointer to display context.
 	 * @param x Pixel X coordinate (0 to 127).
 	 * @param y Pixel Y coordinate (0 to 63).
-	 * @param turn_on true to set pixel high (white), false to clear pixel (black).
+	 * @param turn_on true to set pixel high (white), false to clear (black).
 	 */
 	static inline void ssd1306_draw_pixel(ssd1306_t* disp, int x, int y,
 		bool turn_on);
@@ -106,7 +109,7 @@ extern "C" {
 	 * @param x Horizontal pixel position (0 to 127).
 	 * @param y Vertical pixel position (0 to 63).
 	 * @param str Null-terminated string to print.
-	 * @param scale Scaling factor (1 = standard 5x7 glyphs, 2 = double-size 10x14).
+	 * @param scale Scaling factor (1 = std 5x7 glyphs, 2 = double-size 10x14).
 	 */
 	void ssd1306_printstr_scaled(ssd1306_t* disp, int x, int y,
 		const char* str, uint8_t scale);
