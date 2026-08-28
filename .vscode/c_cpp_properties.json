@@ -4,6 +4,7 @@
             "name": "Pico",
             "includePath": [
                 "${workspaceFolder}/**",
+                "lib/**",
                 "${userHome}/.pico-sdk/sdk/2.2.0/**"
             ],
             "forcedInclude": [

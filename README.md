@@ -9,7 +9,7 @@ The device is intended to work in two ways:
 
 If you send plain ASCII text, it gets printed. But if you send an ASCII 0x01 it goes into command mode, attempting to read what's sent next as a command, until it sees an ASCII 0x04 code.
 
-An I2C port is configured but not yet used. The aim is to attach a small OLED display at some point.
+An I2C port is used for a small OLED screen (SSD1306).
 
 ## THE HARDWARE
 
@@ -29,25 +29,23 @@ The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, so
 
 ### Signals
 
-| **Pin** | **Function** | **Host** | **Def.** | **Cntl by** | **Note** |
+| **Pin** | **Function** | **Host** | **Def** | **Cntl by** | **Note** |
 | :---: | :---: | :---: | :---: | :---: | --- |
-| 1 | /STROBE | Out —> | HIGH | Host | Pulsed low by host for 0.5-500 µsecs. |
-| 2-9 | Data D0-D7 | Out —> | – | Host | |
+| 1 | /STROBE | Out —> | HIGH | Host | Pulsed low by host for 0.5-500 µsecs |
+| 2-9 | Data D0-D7 | Out —> | – | Host | Data bus |
 | 10 | /ACK | <— In | HIGH | Printer | Pulsed low by printer to acknowledge receipt of data |
-| 11 | BUSY | <— In | LOW | Printer | Taken high by printer when busy. |
+| 11 | BUSY | <— In | LOW | Printer | Taken high by printer when busy |
 | 12 | PE | <— In | LOW | Printer | Taken high by printer if paper out |
-| 13 | SELECT | <— In | HIGH | Printer | Taken low when printer goes offline. |
+| 13 | SELECT | <— In | HIGH | Printer | Taken low when printer goes offline |
 | 14 | /AUTOFEED | Out —> | LOW | Host | Host pulls high to force automatic linefeed |
-| 15 | /ERROR | <— In | HIGH | Printer | Taken low to indicate error. |
+| 15 | /ERROR | <— In | HIGH | Printer | Taken low to indicate error |
 | 16 | /INIT | Out —> | HIGH | Host | Reset. Taken low by host to initialise/reset printer |
-| 17 | /SEL-IN | Out —> | LOW | Host | Taken high by host to take printer offline. |
+| 17 | /SEL-IN | Out —> | LOW | Host | Taken high by host to take printer offline |
 | 18-25 | GND | – | – | – | – |
 
 On the MX-80, DIP switch 2-3 can be used to 'fix' the `/AUTOFEED` setting. Factory default for the switch is OFF (which is how my printer has it). In effect, this allows the host to control this function.
 
-When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed after printing each line.
-
-The DIP switch setting is ORed with the signal on line 14. So if the DIP switch is set to OFF, the line is held high and then the host can either allow this to remain high (Autofeed disabled) or take it low (Autofeed enabled). If the DIP switch is set to ON, Autofeed is always disabled.
+When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed after printing each line. The DIP switch setting is ORed with the signal on line 14. So if the DIP switch is set to OFF, the line is held high and then the host can either allow this to remain high (Autofeed disabled) or take it low (Autofeed enabled). If the DIP switch is set to ON, Autofeed is always disabled.
 
 `/SEL-IN`: Data input to the printer is possible only when `/SEL-IN` is LOW. However, DIP switch 1-8 on the Epson makes this default to LOW anyway.
 

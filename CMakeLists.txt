@@ -37,7 +37,8 @@ pico_sdk_init()
 
 add_executable(
     SmartMatrix SmartMatrix.cpp
-    pico_ssd1306_basic.c
+    lib/pico_ssd1306_basic.c
+    lib/display_funcs.cpp
 )
 
 pico_set_program_name(SmartMatrix "SmartMatrix")
