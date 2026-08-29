@@ -9,6 +9,9 @@
 void init_display();
 void display_activity(const char* header, const char* activity,
 	const char* status);
+void display_AF(void);
+void display_SSID(void);
+void display_IP(void);
 void display_status(uint8_t state, uint32_t data);
 
 

@@ -1,5 +1,5 @@
-#ifndef __LIB_DEFINES_H__
-#define __LIB_DEFINES_H__
+#ifndef __SMARTMATRIX_DEFINES_H__
+#define __SMARTMATRIX_DEFINES_H__
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
@@ -13,6 +13,8 @@
 /** @brief Hostname broadcast over DHCP/mDNS */
 #define NET_IF_HOSTNAME "smartmatrix"
 
+#define IP_BUF_SIZE 20
+
 /** @brief Maximum retry attempts for initial network association */
 #define WIFI_MAX_TRIES 5
 
@@ -22,8 +24,11 @@
 #define RESET_DURATION  100 // ms - Active-low INIT pulse for hardware reset
 
 // --- In-band command delimiters ---
-#define CMD_MODE_START 0x01 // Start of Header: Switch stream to command mode
-#define CMD_MODE_END   0x04 // End of Transmission: Return stream to print mode
+// #define CMD_MODE_START 0x01 // Start of Header: Switch stream to command mode
+#define PRT_MODE_END   0x04 // End of Transmission: Return stream to print mode
+
+#define CHAR_LF 0x0A		// Linefeed
+#define CHAR_CR 0x0D		// Carriage return
 
 /**
  * @brief Bitmask restricting data writes strictly to GPIO 0 through 7.
@@ -76,9 +81,17 @@
 /**
  * @brief State machine enum for parsing in-band printer control commands.
  */
-enum ParserState {
-	STATE_PRINTING, /**< Normal pass-through mode: bytes routed to printer */
-	STATE_COMMAND   /**< Command intercept mode: bytes captured into buffer */
+enum SerialMode {
+	STATE_PRINTING, /**< Pass-through mode: bytes routed to printer */
+	STATE_COMMAND   /**< CLI mode: bytes captured into buffer */
+};
+
+enum CommandState {
+	// In handle_command() this determines how the latest incoming string is
+	// treated:
+	CMD_COMMAND,			// As a command */
+	CMD_SSID,				// As an SSID name
+	CMD_PASSWD				// As a Wifi password
 };
 
 enum SystemStatus {
@@ -91,7 +104,8 @@ enum ErrorState {
 	ERR_NONE,
 	ERR_OFFLINE,
 	ERR_GEN,
-	ERR_PE
+	ERR_PE,
+	ERR_WIFI
 };
 
 enum AutoFeed { AF_ON, AF_OFF };

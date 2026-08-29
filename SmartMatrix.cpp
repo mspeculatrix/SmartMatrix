@@ -20,6 +20,7 @@
 #include "lib/defines.h"
 #include "lib/pico_ssd1306_basic.h"
 #include "lib/display_funcs.h"
+#include "lib/wifi_funcs.h"
 #include "__wifi_creds.h" // Wifi credentials (WIFI_SSID, WIFI_PASSWORD)
 
 
@@ -32,7 +33,7 @@ inline void send_fifo_msg(uint32_t type, uint32_t payload);
 inline void send_print_byte_to_core1(uint8_t byte);
 void send_byte_to_printer(uint8_t character);
 void handle_command(const char* buffer, size_t length);
-void process_byte(uint8_t byte);
+void process_usb_byte(uint8_t byte);
 void core1_entry();
 static err_t tcp_recv_callback(void* arg,
 	struct tcp_pcb* tpcb,
@@ -41,7 +42,7 @@ static err_t tcp_recv_callback(void* arg,
 static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err);
 void process_fifo_message(uint32_t msg);
 void poll_printer_status(void);
-uint8_t check_for_error(void);
+ErrorState check_for_error(void);
 
 // =============================================================================
 // GLOBAL STATE
@@ -51,20 +52,28 @@ uint8_t system_status = 0;
 const char* system_status_msg[] = { "IDLE/READY", "PRINTING", "ERROR" };
 static uint8_t current_err_state = ERR_NONE;
 
-const char* error_msg[] = { "", "OFFLINE", "ERROR", "PAPER OUT" };
+static SerialMode serial_mode = STATE_COMMAND; // Default to CLI mode
+
+char wifi_ssid[33] = WIFI_SSID; // 32 bytes plus terminator (per 802.11 spec)
+char wifi_passwd[65] = WIFI_PASSWORD; // 63 ASCII or 64 hex char plus terminator
+struct netif* netif = &cyw43_state.netif[CYW43_ITF_STA];
+bool wifi_connected = false;
+
+const char* error_msg[] = { "", "OFFLINE", "ERROR", "PAPER OUT", "NO WIFI" };
 
 /** @brief In-band command accumulation buffer */
 char cmd_buffer[256];
 
 /** @brief String to hold IP address */
-char ip_buf[20];
+char ip_buf[IP_BUF_SIZE];
 
 /** @brief Autofeed configuration */
-uint8_t autofeed_cfg = AF_OFF;				// Active low; Disabled by default
+uint8_t autofeed_cfg = AF_OFF;                // Active low; Disabled by default
 
 // FIFO messages
-static uint32_t total_job_bytes = 0;
-static bool is_printing = false;
+// Marked as volatile since these are shared across core contexts
+static volatile uint32_t total_job_bytes = 0;
+static volatile bool is_printing = false;
 
 /** @brief Current index within the command buffer */
 size_t cmd_idx = 0;
@@ -133,7 +142,6 @@ void init_hardware() {
 }
 
 
-
 /**
  * @brief Sends messages over FIFO from Core 1 to Core 0
  */
@@ -162,7 +170,7 @@ void send_byte_to_printer(uint8_t character) {
 	// Toggle LED to indicate bit-banging activity
 	gpio_put(ACTIVITY_LED_PIN, 1);
 
-	// Block until printer is READY: Signals conditions must be:
+	// Block until printer is READY: Signals whose conditions must be:
 	// - BUSY   - LOW
 	// - SELECT - HIGH
 	// - /ERROR - HIGH
@@ -191,66 +199,121 @@ void send_byte_to_printer(uint8_t character) {
  * @param length Length of the string in bytes.
  */
 void handle_command(const char* buffer, size_t length) {
-	if (strncmp(buffer, "STATUS", length) == 0) {
-		printf(system_status_msg[system_status]);
-		printf("\n");
-	} else if (strncmp(buffer, "RESET", length) == 0) {
-		// Assert hardware initialise pulse
-		gpio_put(ACTIVITY_LED_PIN, 1);
-		gpio_put(INIT_PIN, 0);
-		sleep_ms(RESET_DURATION);
-		gpio_put(INIT_PIN, 1);
-		gpio_put(ACTIVITY_LED_PIN, 0);
-		printf("MSG:PRINTER_RESET_EXECUTED\n");
-	} else if (strncmp(buffer, "AF_ON", length) == 0) {
-		autofeed_cfg = AF_ON;
-		gpio_put(AUTOFEED_PIN, autofeed_cfg);
-	} else if (strncmp(buffer, "AF_OFF", length) == 0) {
-		autofeed_cfg = AF_OFF;
-		gpio_put(AUTOFEED_PIN, autofeed_cfg);
-	} else {
-		printf("ERR:UNKNOWN_COMMAND\n");
+	static CommandState command_mode = CMD_COMMAND;
+	// char msgbuf[20];
+	// snprintf(msgbuf, sizeof(msgbuf), "mode: %u\n", command_mode);
+	// printf(msgbuf);
+	switch (command_mode) {
+		case CMD_COMMAND:
+			if (strncmp(buffer, "STAT", length) == 0) {
+				printf(system_status_msg[system_status]);
+				printf("\n");
+			} else if (strncmp(buffer, "RESET", length) == 0) {
+				if (system_status == STATUS_IDLE) {
+					printf("> Resetting...\n");
+					gpio_put(ACTIVITY_LED_PIN, 1);
+					gpio_put(INIT_PIN, 0);
+					sleep_ms(RESET_DURATION);
+					gpio_put(INIT_PIN, 1);
+					gpio_put(ACTIVITY_LED_PIN, 0);
+					printf("> PRINTER RESET\n");
+				} else {
+					printf("! ERR: Printer busy or offline.\n");
+				}
+			} else if (strncmp(buffer, "PRT", length) == 0) {
+				// Switch into serial printing mode
+				if (system_status == STATUS_IDLE) {
+					serial_mode = STATE_PRINTING;
+					printf("RDY\n");                 // Acknowledgement message
+				} else {
+					printf("ERR\n");
+					printf("Printer not available.\n");
+				}
+			} else if (strncmp(buffer, "CONN", length) == 0) {
+				// Connect to wifi
+				wifi_connected = false;					// Reset
+				if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
+					wifi_connected = true;
+					display_status(STATUS_IDLE, 0);
+				} else {
+					display_status(STATUS_ERROR, ERR_WIFI);
+					sleep_ms(3000);
+				}
+			} else if (strncmp(buffer, "SSID", length) == 0) {
+				command_mode = CMD_SSID;
+				printf("> ENTER WIFI SSID: ");        // Prompt
+			} else if (strncmp(buffer, "PASSWD", length) == 0) {
+				command_mode = CMD_PASSWD;
+				printf("> ENTER WIFI PASSWORD: ");    // Prompt
+			} else if (strncmp(buffer, "AF_ON", length) == 0) {
+				printf("> AUTOFEED ON\n");
+				autofeed_cfg = AF_ON;
+				gpio_put(AUTOFEED_PIN, autofeed_cfg);
+				display_AF();
+			} else if (strncmp(buffer, "AF_OFF", length) == 0) {
+				printf("> AUTOFEED OFF\n");
+				autofeed_cfg = AF_OFF;
+				display_AF();
+				gpio_put(AUTOFEED_PIN, autofeed_cfg);
+			} else {
+				printf("! ERR: UNKNOWN COMMAND\n");
+			}
+			break;
+		case CMD_SSID:
+			// Copy input safely and guarantee null-termination
+			strncpy(wifi_ssid, buffer, sizeof(wifi_ssid) - 1);
+			wifi_ssid[sizeof(wifi_ssid) - 1] = '\0';
+			printf("> SSID set to: %s\n", wifi_ssid);
+			command_mode = CMD_COMMAND;
+			break;
+		case CMD_PASSWD:
+			strncpy(wifi_passwd, buffer, sizeof(wifi_passwd) - 1);
+			wifi_passwd[sizeof(wifi_passwd) - 1] = '\0';
+			printf("> Password updated.\n");
+			command_mode = CMD_COMMAND;
+			break;
+		default:
+			// For now just do nothing. We should never get here.
+			printf("ERR: Unexpected command mode!\n");
+			break;
 	}
+	cmd_idx = 0;
 }
 
 /**
- * @brief Evaluates bytes in state-machine logic to divert management commands.
+ * @brief Evaluates bytes specifically from USB CDC (Serial) on Core 0.
  *
- * Filtered printable characters (>= 0x07) are passed straight to the printer.
- * Bytes wrapped in CMD_MODE_START (0x01) and CMD_MODE_END (0x04) are diverted
- * into the command buffer.
+ * This function runs strictly in the Core 0 context to separate USB terminal
+ * commands from binary network printing data.
  *
- * @param byte Incoming stream byte from Network or USB CDC.
+ * @param byte Incoming stream byte from USB CDC.
  */
-void process_byte(uint8_t byte) {
-	static ParserState current_state = STATE_PRINTING;
-
-	if (current_state == STATE_PRINTING) {
-		if (byte == CMD_MODE_START) {
-			current_state = STATE_COMMAND;
+void process_usb_byte(uint8_t byte) {
+	if (serial_mode == STATE_PRINTING) {
+		if (byte == PRT_MODE_END) {    // Code indicating end of print mode
+			serial_mode = STATE_COMMAND;
 			cmd_idx = 0;
-		} else if (byte >= 0x07) {
-			if (!is_printing) {
-				is_printing = true;
-				send_fifo_msg(FIFO_MSG_JOB_START, 0);
-			}
-
-			send_byte_to_printer(byte);
-			total_job_bytes++;
-
-			if (total_job_bytes % 100 == 0) {
-				send_fifo_msg(FIFO_MSG_BYTE_COUNT, total_job_bytes);
-			}
-		}
-	} else if (current_state == STATE_COMMAND) {
-		if (byte == CMD_MODE_END) {
-			cmd_buffer[cmd_idx] = '\0';
-			handle_command(cmd_buffer, cmd_idx);
-			current_state = STATE_PRINTING;
+			printf("\n> EXIT PRINT MODE\n");
 		} else {
-			if (cmd_idx < sizeof(cmd_buffer) - 1) {
-				cmd_buffer[cmd_idx++] = (char)byte;
-			}
+			// Forward raw USB print byte to Core 1 via FIFO
+			send_print_byte_to_core1(byte);
+		}
+	} else if (serial_mode == STATE_COMMAND) {
+		switch (byte) {
+			case CHAR_CR:
+				// Do nothing. We're going to ignore carriage returns
+				break;
+			case CHAR_LF:
+				// This signals the end of a command.
+				cmd_buffer[cmd_idx] = '\0';
+				handle_command(cmd_buffer, cmd_idx);
+				break;
+			default:
+				// Just add char to buffer (allowing all printable chars)
+				if (cmd_idx < sizeof(cmd_buffer) - 1) {
+					cmd_buffer[cmd_idx++] = (char)byte;
+				}
+				break;
 		}
 	}
 }
@@ -262,7 +325,7 @@ void process_byte(uint8_t byte) {
  * through the hardware inter-processor SIO FIFO.
  */
 void core1_entry() {
-	printf("MSG:CORE1_STARTED_PRINTER_LOOP\n");
+	printf(": STARTED PRINTER LOOP (Core 1)\nREADY\n");
 
 	while (true) {
 		// Check if Core 0 pushed network or USB data into the hardware FIFO
@@ -271,7 +334,34 @@ void core1_entry() {
 
 			// Core 1 processes only FIFO messages tagged as DATA (Bit 31 = 0)
 			if ((incoming_msg & 0x80000000) == FIFO_TAG_DATA) {
-				process_byte((uint8_t)(incoming_msg & 0xFF));
+				uint8_t print_byte = (uint8_t)(incoming_msg & 0xFF);
+
+				// Manage job statistics and status messaging on Core 1
+				// direct execution
+				if (!is_printing) {
+					is_printing = true;
+					total_job_bytes = 0;
+					send_fifo_msg(FIFO_MSG_JOB_START, 0);
+				}
+
+				// Send byte directly to hardware pins via Centronics handshake
+				send_byte_to_printer(print_byte);
+				total_job_bytes++;
+
+				// Notify Core 0 every 100 bytes to update the OLED display
+				if (total_job_bytes % 100 == 0) {
+					send_fifo_msg(FIFO_MSG_BYTE_COUNT, total_job_bytes);
+				}
+			}
+		} else {
+			// If FIFO stays empty and we were printing, mark end of job
+			if (is_printing) {
+				// Short settling delay before declaring job finished
+				sleep_ms(500);
+				if (!multicore_fifo_rvalid()) {
+					is_printing = false;
+					send_fifo_msg(FIFO_MSG_JOB_END, total_job_bytes);
+				}
 			}
 		}
 		tight_loop_contents();
@@ -302,7 +392,8 @@ static err_t tcp_recv_callback(void* arg,
 		for (struct pbuf* q = p; q != NULL; q = q->next) {
 			uint8_t* src = (uint8_t*)q->payload;
 			for (int i = 0; i < q->len; i++) {
-				// Safely transfer incoming byte across SIO FIFO to Core 1
+				// TCP is ALWAYS in print mode. Safely transfer directly to
+				// Core 1 FIFO.
 				send_print_byte_to_core1(src[i]);
 			}
 		}
@@ -327,6 +418,13 @@ static err_t tcp_recv_callback(void* arg,
  */
 static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err) {
 	if (err == ERR_OK && newpcb != NULL) {
+		// Refuse incoming TCP print connections if hardware printer is in an
+		// error state
+		if (system_status == STATUS_ERROR) {
+			printf("! TCP REJECTED: PRINTER IN ERROR STATE\n");
+			tcp_abort(newpcb);
+			return ERR_ABRT;
+		}
 		tcp_recv(newpcb, tcp_recv_callback);
 	}
 	return ERR_OK;
@@ -356,10 +454,16 @@ void process_fifo_message(uint32_t msg) {
 	}
 }
 
+/**
+ * @brief Polls hardware pins and manages state transitions on Core 0.
+ *
+ * State changes now persist correctly, protecting STATUS_PRINTING from
+ * being cleared on every loop iteration.
+ */
 void poll_printer_status(void) {
 	uint8_t new_err = check_for_error();
 
-	// Only update if state actually changes
+	// Only update state if error status actually changes
 	if (new_err != current_err_state) {
 		current_err_state = new_err;
 
@@ -367,7 +471,8 @@ void poll_printer_status(void) {
 			system_status = STATUS_ERROR;
 			display_status(STATUS_ERROR, current_err_state);
 		} else {
-			// Error cleared: restore previous state
+			// Error cleared: restore printing or idle state based on active
+			// job flag
 			if (is_printing) {
 				system_status = STATUS_PRINTING;
 				display_status(STATUS_PRINTING, total_job_bytes);
@@ -379,19 +484,18 @@ void poll_printer_status(void) {
 	}
 }
 
-uint8_t check_for_error(void) {
-	uint8_t err_state = ERR_NONE;
-	// Check SELECT, /ERROR and PE signals, in that order
-	if (gpio_get(SELECT_PIN) == 0) {	// Printer is offline
-		err_state = ERR_OFFLINE;
-	}
+ErrorState check_for_error(void) {
+	ErrorState err_state = ERR_NONE;
+	// Check /ERROR, PE and SELECT signals, in that order
 
-	if (gpio_get(ERROR_PIN) == 0) {		// Printer is indicating an error
+	if (gpio_get(ERROR_PIN) == 0) {			// Printer is indicating an error
 		err_state = ERR_GEN;
 	}
-
-	if (gpio_get(PAPER_END_PIN) == 1) {	// Paper end condition
+	if (gpio_get(PAPER_END_PIN) == 1) {		// Paper end condition
 		err_state = ERR_PE;
+	}
+	if (gpio_get(SELECT_PIN) == 0) {		// Printer is offline
+		err_state = ERR_OFFLINE;
 	}
 	return err_state;
 }
@@ -417,76 +521,29 @@ int main() {
 	init_hardware();
 	init_display();
 
-	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", "0.0.0.0");
+	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", "--");
 
-	printf("\nMSG:SMARTMATRIX_INITIALISED_Core_0\n");
+	printf("\n: SMARTMATRIX INITIALISED (Core 0)\n");
 
 	// Initialise the CYW43439 wifi hardware stack FIRST
-	printf("MSG:INITIALISING_WIFI_CHIP\n");
+	printf(": Initialising WIFI system\n");
 	if (cyw43_arch_init_with_country(CYW43_COUNTRY('F', 'R', 0))) {
-		printf("ERR:CYW43_INIT_FAILED\n");
+		printf("! ERR: CYW43 INIT FAILED\n");
 		return -1;
 	}
 
 	// Enable station (client) mode
 	cyw43_arch_enable_sta_mode();
 
-	struct netif* netif = &cyw43_state.netif[CYW43_ITF_STA];
 	netif_set_hostname(netif, NET_IF_HOSTNAME);
-
-	printf("MSG:WIFI_CONNECTING_SSID_%s\n", WIFI_SSID);
 
 	// Disable power-save sleep modes to optimise DHCP & TCP negotiation speed
 	cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
 
-	// Wifi association retry loop
-	// Resolves AP session state drop delays (ERR_TIMEOUT -8 on soft resets)
-	int err = -1;
-	int retries = 0;
-
-	while (err != 0 && retries < WIFI_MAX_TRIES) {
-		retries++;
-		char boot_msg[24];
-		snprintf(boot_msg, sizeof(boot_msg), "CONNECTING (%d/5)...", retries);
-		display_activity("WIFI", boot_msg, "0.0.0.0");
-		if (retries > 1) {
-			printf("MSG:WIFI_RETRY_ATTEMPT_%d/%d\n", retries, WIFI_MAX_TRIES);
-			gpio_put(WIFI_LED_PIN, 0);
-			sleep_ms(2000); // Delay to allow AP state machine reset
-		}
-		gpio_put(WIFI_LED_PIN, 1); // On to indicate attempt to connect
-
-		err = cyw43_arch_wifi_connect_timeout_ms(
-			WIFI_SSID,
-			WIFI_PASSWORD,
-			CYW43_AUTH_WPA2_AES_PSK,
-			15000 // 15s timeout window per attempt
-		);
+	if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
+		wifi_connected = true;
 	}
-
-	if (err != 0) {
-		printf("ERR:FATAL_WIFI_CONNECTION_FAILED_%d\n", err);
-		display_activity("WIFI", "NO IP", "WIFI FAILED");
-		gpio_put(WIFI_LED_PIN, 0); // Off to show failure to connect
-		return -1;
-	}
-
-	snprintf(ip_buf,
-		sizeof(ip_buf),
-		"IP: %s",
-		ip4addr_ntoa(netif_ip4_addr(netif))
-	);
-	printf("MSG:WIFI_CONNECTED\n");
-	printf("MSG:IP_ADDRESS_%s\n", ip4addr_ntoa(netif_ip4_addr(netif)));
-	display_status(STATUS_IDLE, 0);
-
-	// Flash LED to show success
-	for (uint8_t i = 0; i < 5; i++) {
-		sleep_ms(100);
-		gpio_put(WIFI_LED_PIN, 0);
-		sleep_ms(100);
-		gpio_put(WIFI_LED_PIN, 1);
-	}
+	display_status(STATUS_IDLE, 0);				// Default status
 
 	// Initialise RAW TCP Port 9100 Server using background thread-safe locks
 	cyw43_arch_lwip_begin();
@@ -495,7 +552,7 @@ int main() {
 		if (tcp_bind(pcb, IP_ADDR_ANY, TCP_PORT) == ERR_OK) {
 			pcb = tcp_listen(pcb);
 			tcp_accept(pcb, tcp_accept_callback);
-			printf("MSG:TCP_SERVER_LISTENING\n");
+			printf(": TCP server listening\n");
 		}
 	}
 	cyw43_arch_lwip_end();
@@ -508,8 +565,8 @@ int main() {
 		// Non-blocking poll for local USB Serial terminal bytes
 		int usb_char = getchar_timeout_us(0);
 		if (usb_char != PICO_ERROR_TIMEOUT) {
-			// Safely forward local USB inputs to Core 1 over FIFO
-			send_print_byte_to_core1((uint8_t)usb_char);
+			// Pass incoming USB bytes to process_usb_byte on Core 0 context
+			process_usb_byte((uint8_t)usb_char);
 		}
 
 		// FIFO message processing from Core 1

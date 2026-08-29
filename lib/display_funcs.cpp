@@ -4,6 +4,8 @@ extern ssd1306_t display;
 extern uint8_t autofeed_cfg;
 extern char ip_buf[20];
 extern const char* error_msg[];
+extern char wifi_ssid[];
+extern bool wifi_connected;
 
 /**
  * @brief Initialises the SSD1306 display over I2C0 (GPIO 20/21).
@@ -54,17 +56,34 @@ void display_status(uint8_t state, uint32_t data) {
 		ssd1306_printstr_double(&display, 48, 24, count_buf);
 	}
 
-	char stat_msg[22];
+	display_AF();
+	display_SSID();
+	display_IP();
 
+	ssd1306_show(&display);
+}
+
+void display_AF(void) {
+	char stat_msg[9];
 	if (autofeed_cfg == AF_ON) {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AUTOFEED");
 	} else {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AF off");
 	}
-
 	ssd1306_println(&display, 5, stat_msg);
+	ssd1306_show(&display);
+}
 
-	ssd1306_println(&display, 7, ip_buf);
+void display_IP(void) {
+	if (wifi_connected) {
+		ssd1306_println(&display, 7, ip_buf);
+	} else {
+		ssd1306_println(&display, 7, "NO WIFI");
+	}
+	ssd1306_show(&display);
+}
 
+void display_SSID(void) {
+	ssd1306_println(&display, 6, wifi_ssid);
 	ssd1306_show(&display);
 }
