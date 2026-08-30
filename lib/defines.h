@@ -1,13 +1,14 @@
+/**
+ * @file defines.h
+ * @brief Constants and enums
+ */
+
 #ifndef __SMARTMATRIX_DEFINES_H__
 #define __SMARTMATRIX_DEFINES_H__
 
-// ============================================================================
-// CONFIGURATION CONSTANTS
-// ============================================================================
+#define VERSION_STR "Version 0.9.1"
 
-#define VERSION_STR "Version 0.9.0"
-
-/** @brief Standard JetDirect / RAW TCP printing port */
+ /** @brief Standard JetDirect / RAW TCP printing port */
 #define TCP_PORT 9100
 
 /** @brief Hostname broadcast over DHCP/mDNS */

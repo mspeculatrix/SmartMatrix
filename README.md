@@ -4,7 +4,7 @@ Firmware for the Raspberry Pi Pico 2W-based SmartMatrix adapter. This uses the m
 
 The device is intended to work in two ways:
 
-- **USB**: If you connect to it via USB it appears as a virtual com port. You send the data over serial. This is intended to be used programmatically.
+- **USB**: If you connect to it via USB it appears as a virtual com port. By default this offers a command interface that you can use to do things like set the wifi SSID and password. If you send the command `PRT` any subsequent bytes sent get forwarded directly to the printer until you send an ASCII 0x04 (EOT) character.
 - **TCP socket**: The code on Core 1 effectively emulates an HP DirectJet 500X device available over wifi. You send data via a TCP socket connection to port :9100.
 
 If you send plain ASCII text, it gets printed. But if you send an ASCII 0x01 it goes into command mode, attempting to read what's sent next as a command, until it sees an ASCII 0x04 code.
@@ -52,6 +52,12 @@ When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed after p
 ## VERSION HISTORY
 
 Dates indicate when the dev branch code was merged into main.
+
+### 0.9.1 IN PROGRESS
+
+- Changed serial connection so that it operates by default in CLI/command mode.
+- Created CLI commands to configure wifi and make connection.
+- Added functionality to save wifi credentials to non-volatile memory.
 
 ### 0.9.0 26/08/2026
 

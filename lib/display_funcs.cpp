@@ -1,12 +1,5 @@
 #include "display_funcs.h"
 
-extern ssd1306_t display;
-extern uint8_t autofeed_cfg;
-extern char ip_buf[20];
-extern const char* error_msg[];
-extern char wifi_ssid[];
-extern bool wifi_connected;
-
 /**
  * @brief Initialises the SSD1306 display over I2C0 (GPIO 20/21).
  */

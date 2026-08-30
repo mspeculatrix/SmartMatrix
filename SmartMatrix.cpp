@@ -18,72 +18,86 @@
 #include "hardware/i2c.h"
 #include "lwip/tcp.h"
 #include "lib/defines.h"
+#include "lib/globals.h"
 #include "lib/pico_ssd1306_basic.h"
 #include "lib/display_funcs.h"
+#include "lib/printer_funcs.h"
 #include "lib/wifi_funcs.h"
-#include "__wifi_creds.h" // Wifi credentials (WIFI_SSID, WIFI_PASSWORD)
 
-
- // =============================================================================
+ // ============================================================================
  // FUNCTION PROTOTYPES
- // =============================================================================
+ // ============================================================================
 
+void core1_entry();
 void init_hardware();
+
+// FIFO functions
 inline void send_fifo_msg(uint32_t type, uint32_t payload);
 inline void send_print_byte_to_core1(uint8_t byte);
-void send_byte_to_printer(uint8_t character);
+void process_fifo_message(uint32_t msg);
+
+// USB/serial CLI functions
 void handle_command(const char* buffer, size_t length);
 void process_usb_byte(uint8_t byte);
-void core1_entry();
-static err_t tcp_recv_callback(void* arg,
-	struct tcp_pcb* tpcb,
-	struct pbuf* p,
-	err_t err);
+
+// TCP functions
 static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err);
-void process_fifo_message(uint32_t msg);
-void poll_printer_status(void);
-ErrorState check_for_error(void);
+static err_t tcp_recv_callback(void* arg, struct tcp_pcb* tpcb,
+	struct pbuf* p, err_t err);
 
-// =============================================================================
-// GLOBAL STATE
-// =============================================================================
-
-uint8_t system_status = 0;
-const char* system_status_msg[] = { "IDLE/READY", "PRINTING", "ERROR" };
-static uint8_t current_err_state = ERR_NONE;
-
-static SerialMode serial_mode = STATE_COMMAND; // Default to CLI mode
-
-char wifi_ssid[33] = WIFI_SSID; // 32 bytes plus terminator (per 802.11 spec)
-char wifi_passwd[65] = WIFI_PASSWORD; // 63 ASCII or 64 hex char plus terminator
-struct netif* netif = &cyw43_state.netif[CYW43_ITF_STA];
-bool wifi_connected = false;
-
-const char* error_msg[] = { "", "OFFLINE", "ERROR", "PAPER OUT", "NO WIFI" };
-
-/** @brief In-band command accumulation buffer */
-char cmd_buffer[256];
-
-/** @brief String to hold IP address */
-char ip_buf[IP_BUF_SIZE];
-
-/** @brief Autofeed configuration */
-uint8_t autofeed_cfg = AF_OFF;                // Active low; Disabled by default
-
-// FIFO messages
-// Marked as volatile since these are shared across core contexts
-static volatile uint32_t total_job_bytes = 0;
-static volatile bool is_printing = false;
-
-/** @brief Current index within the command buffer */
-size_t cmd_idx = 0;
-
-/** @brief OLED display */
-ssd1306_t display;
-
-// =============================================================================
+// *****************************************************************************
 // FUNCTION IMPLEMENTATIONS
-// =============================================================================
+// *****************************************************************************
+
+/**
+ * @brief Main processing loop for Core 1 (high-priority printer thread).
+ *
+ * Runs an infinite polling loop reading incoming characters pushed by Core 0
+ * through the hardware inter-processor SIO FIFO.
+ */
+void core1_entry() {
+	printf(": STARTED PRINTER LOOP (Core 1)\nREADY\n");
+
+	while (true) {
+		// Check if Core 0 pushed network or USB data into the hardware FIFO
+		if (multicore_fifo_rvalid()) {
+			uint32_t incoming_msg = multicore_fifo_pop_blocking();
+
+			// Core 1 processes only FIFO messages tagged as DATA (Bit 31 = 0)
+			if ((incoming_msg & 0x80000000) == FIFO_TAG_DATA) {
+				uint8_t print_byte = (uint8_t)(incoming_msg & 0xFF);
+
+				// Manage job statistics and status messaging on Core 1
+				// direct execution
+				if (!is_printing) {
+					is_printing = true;
+					total_job_bytes = 0;
+					send_fifo_msg(FIFO_MSG_JOB_START, 0);
+				}
+
+				// Send byte directly to hardware pins via Centronics handshake
+				send_byte_to_printer(print_byte);
+				total_job_bytes++;
+
+				// Notify Core 0 every 100 bytes to update the OLED display
+				if (total_job_bytes % 100 == 0) {
+					send_fifo_msg(FIFO_MSG_BYTE_COUNT, total_job_bytes);
+				}
+			}
+		} else {
+			// If FIFO stays empty and we were printing, mark end of job
+			if (is_printing) {
+				// Short settling delay before declaring job finished
+				sleep_ms(500);
+				if (!multicore_fifo_rvalid()) {
+					is_printing = false;
+					send_fifo_msg(FIFO_MSG_JOB_END, total_job_bytes);
+				}
+			}
+		}
+		tight_loop_contents();
+	}
+}
 
 /**
  * @brief Configures GPIO directional modes, pull-up/downs, and I2C peripherals.
@@ -141,6 +155,9 @@ void init_hardware() {
 	gpio_put(ACTIVITY_LED_PIN, 0);
 }
 
+// -----------------------------------------------------------------------------
+// FIFO FUNCTIOSN
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Sends messages over FIFO from Core 1 to Core 0
@@ -158,39 +175,9 @@ inline void send_print_byte_to_core1(uint8_t byte) {
 	multicore_fifo_push_blocking(msg);
 }
 
-/**
- * @brief Transmits a single byte to the printer using Centronics handshake.
- *
- * Checks the printer BUSY line, places the data byte on the bus, and asserts
- * the STROBE line for the required timing duration.
- *
- * @param character The 8-bit ASCII or binary byte to send.
- */
-void send_byte_to_printer(uint8_t character) {
-	// Toggle LED to indicate bit-banging activity
-	gpio_put(ACTIVITY_LED_PIN, 1);
-
-	// Block until printer is READY: Signals whose conditions must be:
-	// - BUSY   - LOW
-	// - SELECT - HIGH
-	// - /ERROR - HIGH
-	// - PE     - LOW
-	while (gpio_get(BUSY_PIN) || !gpio_get(SELECT_PIN)
-		|| gpio_get(PAPER_END_PIN) || !gpio_get(ERROR_PIN)) {
-		tight_loop_contents(); // Microcontroller spinlock hint
-	}
-
-	// Write byte to lower 8 pins (GPIO 0-7) using atomic bit-masking
-	gpio_put_masked(DATA_MASK, (uint32_t)character);
-	// IEEE 1284 strobe pulse setup time
-	sleep_us(HOLD_DURATION);
-	gpio_put(STROBE_PIN, 0); // Assert STROBE
-	sleep_us(STROBE_DURATION);
-	gpio_put(STROBE_PIN, 1); // De-assert STROBE
-	sleep_us(HOLD_DURATION);
-
-	gpio_put(ACTIVITY_LED_PIN, 0);
-}
+// -----------------------------------------------------------------------------
+// USB-SERIAL FUNCTIONS
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Processes in-band ASCII control commands received over the stream.
@@ -264,12 +251,15 @@ void handle_command(const char* buffer, size_t length) {
 			strncpy(wifi_ssid, buffer, sizeof(wifi_ssid) - 1);
 			wifi_ssid[sizeof(wifi_ssid) - 1] = '\0';
 			printf("> SSID set to: %s\n", wifi_ssid);
+			save_wifi_credentials(wifi_ssid, wifi_passwd); // Persist update
 			command_mode = CMD_COMMAND;
+			break;
 			break;
 		case CMD_PASSWD:
 			strncpy(wifi_passwd, buffer, sizeof(wifi_passwd) - 1);
 			wifi_passwd[sizeof(wifi_passwd) - 1] = '\0';
 			printf("> Password updated.\n");
+			save_wifi_credentials(wifi_ssid, wifi_passwd); // Persist update
 			command_mode = CMD_COMMAND;
 			break;
 		default:
@@ -318,55 +308,9 @@ void process_usb_byte(uint8_t byte) {
 	}
 }
 
-/**
- * @brief Main processing loop for Core 1 (high-priority printer thread).
- *
- * Runs an infinite polling loop reading incoming characters pushed by Core 0
- * through the hardware inter-processor SIO FIFO.
- */
-void core1_entry() {
-	printf(": STARTED PRINTER LOOP (Core 1)\nREADY\n");
-
-	while (true) {
-		// Check if Core 0 pushed network or USB data into the hardware FIFO
-		if (multicore_fifo_rvalid()) {
-			uint32_t incoming_msg = multicore_fifo_pop_blocking();
-
-			// Core 1 processes only FIFO messages tagged as DATA (Bit 31 = 0)
-			if ((incoming_msg & 0x80000000) == FIFO_TAG_DATA) {
-				uint8_t print_byte = (uint8_t)(incoming_msg & 0xFF);
-
-				// Manage job statistics and status messaging on Core 1
-				// direct execution
-				if (!is_printing) {
-					is_printing = true;
-					total_job_bytes = 0;
-					send_fifo_msg(FIFO_MSG_JOB_START, 0);
-				}
-
-				// Send byte directly to hardware pins via Centronics handshake
-				send_byte_to_printer(print_byte);
-				total_job_bytes++;
-
-				// Notify Core 0 every 100 bytes to update the OLED display
-				if (total_job_bytes % 100 == 0) {
-					send_fifo_msg(FIFO_MSG_BYTE_COUNT, total_job_bytes);
-				}
-			}
-		} else {
-			// If FIFO stays empty and we were printing, mark end of job
-			if (is_printing) {
-				// Short settling delay before declaring job finished
-				sleep_ms(500);
-				if (!multicore_fifo_rvalid()) {
-					is_printing = false;
-					send_fifo_msg(FIFO_MSG_JOB_END, total_job_bytes);
-				}
-			}
-		}
-		tight_loop_contents();
-	}
-}
+// -----------------------------------------------------------------------------
+// TCP FUNCTIONS
+// -----------------------------------------------------------------------------
 
 /**
  * @brief LowIP TCP payload reception callback (executes in Core 0 context).
@@ -454,55 +398,9 @@ void process_fifo_message(uint32_t msg) {
 	}
 }
 
-/**
- * @brief Polls hardware pins and manages state transitions on Core 0.
- *
- * State changes now persist correctly, protecting STATUS_PRINTING from
- * being cleared on every loop iteration.
- */
-void poll_printer_status(void) {
-	uint8_t new_err = check_for_error();
-
-	// Only update state if error status actually changes
-	if (new_err != current_err_state) {
-		current_err_state = new_err;
-
-		if (current_err_state != ERR_NONE) {
-			system_status = STATUS_ERROR;
-			display_status(STATUS_ERROR, current_err_state);
-		} else {
-			// Error cleared: restore printing or idle state based on active
-			// job flag
-			if (is_printing) {
-				system_status = STATUS_PRINTING;
-				display_status(STATUS_PRINTING, total_job_bytes);
-			} else {
-				system_status = STATUS_IDLE;
-				display_status(STATUS_IDLE, 0);
-			}
-		}
-	}
-}
-
-ErrorState check_for_error(void) {
-	ErrorState err_state = ERR_NONE;
-	// Check /ERROR, PE and SELECT signals, in that order
-
-	if (gpio_get(ERROR_PIN) == 0) {			// Printer is indicating an error
-		err_state = ERR_GEN;
-	}
-	if (gpio_get(PAPER_END_PIN) == 1) {		// Paper end condition
-		err_state = ERR_PE;
-	}
-	if (gpio_get(SELECT_PIN) == 0) {		// Printer is offline
-		err_state = ERR_OFFLINE;
-	}
-	return err_state;
-}
-
-// ============================================================================
+// *****************************************************************************
 // MAIN PROGRAM ENTRY POINT (CORE 0)
-// ============================================================================
+// *****************************************************************************
 
 /**
  * @brief Main entry point running on Core 0.
@@ -540,10 +438,26 @@ int main() {
 	// Disable power-save sleep modes to optimise DHCP & TCP negotiation speed
 	cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
 
-	if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
-		wifi_connected = true;
+	bool wifi_configured = load_wifi_credentials(wifi_ssid, wifi_passwd);
+	if (wifi_configured) {
+		printf(": WIFI is configured\n");
+		if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
+			wifi_connected = true;
+			display_status(STATUS_IDLE, 0);				// Default status
+		}
+	} else {
+		// What's in the variables read from the wifi_creds.h file?
+		// Check the SSID setting (not password because user might be using an
+		// open wifi setup).
+		if (strlen(wifi_ssid) > 0) {
+			// We have something, so attempt a connection
+			if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
+				// Successful, so let's save to non-volatile memory
+				save_wifi_credentials(wifi_ssid, wifi_passwd);
+				wifi_connected = true;
+			}
+		}
 	}
-	display_status(STATUS_IDLE, 0);				// Default status
 
 	// Initialise RAW TCP Port 9100 Server using background thread-safe locks
 	cyw43_arch_lwip_begin();
