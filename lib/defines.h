@@ -19,6 +19,9 @@
 /** @brief Maximum retry attempts for initial network association */
 #define WIFI_MAX_TRIES 5
 
+#define WIFI_SSID_LEN 32
+#define WIFI_PASS_LEN 64
+
 // --- IEEE 1284 handshake timings ---
 #define STROBE_DURATION 1   // µs - Minimum active-low STROBE pulse width
 #define HOLD_DURATION   1   // µs - Setup/hold time before/after STROBE edge
@@ -83,28 +86,28 @@
  * @brief State machine enum for parsing in-band printer control commands.
  */
 enum SerialMode {
-	STATE_PRINTING, /**< Pass-through mode: bytes routed to printer */
-	STATE_COMMAND   /**< CLI mode: bytes captured into buffer */
+	STATE_PRINTING, 			// Pass-through mode: bytes routed to printer
+	STATE_COMMAND 				// CLI mode: bytes captured into buffer
 };
 
 enum CommandState {
 	// In handle_command() this determines how the latest incoming string is
 	// treated:
-	CMD_COMMAND,			// As a command */
-	CMD_SSID,				// As an SSID name
-	CMD_PASSWD				// As a Wifi password
+	CMD_COMMAND,				// As a command
+	CMD_SSID,					// As an SSID name
+	CMD_PASSWD					// As a Wifi password
 };
 
 enum SystemStatus {
-	STATUS_IDLE,
-	STATUS_PRINTING,
-	STATUS_ERROR
+	STATUS_IDLE,				// These correspond to the status messages
+	STATUS_PRINTING,			// in system_status_msg[] array, defined in
+	STATUS_ERROR				// globals.h
 };
 
 enum ErrorState {
-	ERR_NONE,
-	ERR_OFFLINE,
-	ERR_GEN,
+	ERR_NONE,					// These correspond to the error messages
+	ERR_OFFLINE,				// in global error_msg[] array, defined in
+	ERR_GEN,					// globals.h
 	ERR_PE,
 	ERR_WIFI
 };

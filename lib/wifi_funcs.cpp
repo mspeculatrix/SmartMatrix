@@ -10,10 +10,10 @@ bool load_wifi_credentials(char* ssid_out, char* passwd_out) {
 
 	// Must match magic header AND contain a non-empty SSID
 	if (config->magic == WIFI_MAGIC_HEADER && strlen(config->ssid) > 0) {
-		strncpy(ssid_out, config->ssid, 33);
-		strncpy(passwd_out, config->password, 65);
-		ssid_out[32] = '\0';
-		passwd_out[64] = '\0';
+		strncpy(ssid_out, config->ssid, WIFI_SSID_LEN + 1);
+		strncpy(passwd_out, config->password, WIFI_PASS_LEN + 1);
+		ssid_out[WIFI_SSID_LEN] = '\0';
+		passwd_out[WIFI_PASS_LEN] = '\0';
 		return true;
 	}
 
@@ -28,8 +28,8 @@ void save_wifi_credentials(const char* ssid, const char* passwd) {
 	memset(&config, 0, sizeof(config));
 
 	config.magic = WIFI_MAGIC_HEADER;
-	strncpy(config.ssid, ssid, 32);
-	strncpy(config.password, passwd, 64);
+	strncpy(config.ssid, ssid, WIFI_SSID_LEN);
+	strncpy(config.password, passwd, WIFI_PASS_LEN);
 
 	// Prepare buffer aligned to full page size (256 bytes)
 	uint8_t buffer[FLASH_PAGE_SIZE];

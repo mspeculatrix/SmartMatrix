@@ -27,8 +27,8 @@ extern char ip_buf[IP_BUF_SIZE];
 
 struct WifiCredentials {
 	uint32_t magic;
-	char ssid[33];
-	char password[65];
+	char ssid[WIFI_SSID_LEN + 1]; 		// Extra byte is for null terminator
+	char password[WIFI_PASS_LEN + 1];	//   "    "   "   "   "      "
 };
 
 #pragma pack(pop)

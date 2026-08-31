@@ -56,7 +56,9 @@ static err_t tcp_recv_callback(void* arg, struct tcp_pcb* tpcb,
  * through the hardware inter-processor SIO FIFO.
  */
 void core1_entry() {
-	printf(": STARTED PRINTER LOOP (Core 1)\nREADY\n");
+	printf(": STARTED PRINTER LOOP (Core 1)\n");
+	printf("\nType HELP for a list of available commands.\n");
+	printf("\nREADY\n");
 
 	while (true) {
 		// Check if Core 0 pushed network or USB data into the hardware FIFO
@@ -193,9 +195,53 @@ void handle_command(const char* buffer, size_t length) {
 	switch (command_mode) {
 		case CMD_COMMAND:
 			if (strncmp(buffer, "STAT", length) == 0) {
-				printf(system_status_msg[system_status]);
+				// Status report
+				printf("STATUS: ");
+				if (system_status != STATUS_ERROR) {
+					printf(system_status_msg[system_status]);
+				} else {
+					printf(error_msg[current_err_state]);
+				}
+				printf("\n");
+				if (gpio_get(SELECT_PIN) == 0) {		// Printer is offline
+					printf("- Printer offline\n");
+				} else {
+					printf("- Printer online\n");
+				}
+				if (gpio_get(ERROR_PIN) == 0) {	// Printer indicates an error
+					printf("- Printer indicating an error\n");
+				}
+				if (gpio_get(PAPER_END_PIN) == 1) {		// Paper end condition
+					printf("- Printer indicating paper out\n");
+				}
+				printf("Autofeed ");
+				if (autofeed_cfg == AF_ON) {
+					printf("ON\n");
+				} else {
+					printf("OFF\n");
+				}
+				printf("Wifi SSID: %s\n", wifi_ssid);
+				printf("Wifi password ");
+				if (strlen(wifi_passwd) == 0) {
+					printf("not");
+				}
+				printf(" configured\n");
+
+			} else if (strncmp(buffer, "HELP", length) == 0) {
+				// Request for help message
+				printf("\nSMARTMATRIX COMMANDS\n");
+				printf("---------------------------------\n");
+				printf("PRT     Start direct print mode\n");
+				printf("STAT    Get status\n");
+				printf("AF_ON   Enable Autofeed function\n");
+				printf("AF_OFF  Disable Autofeed function\n");
+				printf("\n--- WIFI ---\n");
+				printf("CONN    Initiate Wifi connection\n");
+				printf("PASSWD  Enter Wifi password\n");
+				printf("SSID    Enter Wifi SSID\n");
 				printf("\n");
 			} else if (strncmp(buffer, "RESET", length) == 0) {
+				// Request to reset the printer (not the SmartMatrix)
 				if (system_status == STATUS_IDLE) {
 					printf("> Resetting...\n");
 					gpio_put(ACTIVITY_LED_PIN, 1);
@@ -213,8 +259,7 @@ void handle_command(const char* buffer, size_t length) {
 					serial_mode = STATE_PRINTING;
 					printf("RDY\n");                 // Acknowledgement message
 				} else {
-					printf("ERR\n");
-					printf("Printer not available.\n");
+					printf("ERR: Printer not available.\n");
 				}
 			} else if (strncmp(buffer, "CONN", length) == 0) {
 				// Connect to wifi
@@ -224,43 +269,51 @@ void handle_command(const char* buffer, size_t length) {
 					display_status(STATUS_IDLE, 0);
 				} else {
 					display_status(STATUS_ERROR, ERR_WIFI);
-					sleep_ms(3000);
+					sleep_ms(3000); // Give user a chance to read the message
 				}
 			} else if (strncmp(buffer, "SSID", length) == 0) {
+				// Request to set SSID for wifi. The password will be
+				// assumed to be the next string processed by this function.
 				command_mode = CMD_SSID;
 				printf("> ENTER WIFI SSID: ");        // Prompt
 			} else if (strncmp(buffer, "PASSWD", length) == 0) {
+				// Request to set password for wifi. The password will be
+				// assumed to be the next string processed by this function.
 				command_mode = CMD_PASSWD;
 				printf("> ENTER WIFI PASSWORD: ");    // Prompt
 			} else if (strncmp(buffer, "AF_ON", length) == 0) {
+				// Request to turn Autofeed on
 				printf("> AUTOFEED ON\n");
 				autofeed_cfg = AF_ON;
 				gpio_put(AUTOFEED_PIN, autofeed_cfg);
 				display_AF();
 			} else if (strncmp(buffer, "AF_OFF", length) == 0) {
+				// Request to turn Autofeed off
 				printf("> AUTOFEED OFF\n");
 				autofeed_cfg = AF_OFF;
 				display_AF();
 				gpio_put(AUTOFEED_PIN, autofeed_cfg);
 			} else {
+				// Nothing matched, so...
 				printf("! ERR: UNKNOWN COMMAND\n");
 			}
 			break;
 		case CMD_SSID:
-			// Copy input safely and guarantee null-termination
+			// On this pass, the string is assumed to be the wifi SSID
 			strncpy(wifi_ssid, buffer, sizeof(wifi_ssid) - 1);
-			wifi_ssid[sizeof(wifi_ssid) - 1] = '\0';
+			wifi_ssid[sizeof(wifi_ssid) - 1] = '\0'; // Ensure null termination
 			printf("> SSID set to: %s\n", wifi_ssid);
 			save_wifi_credentials(wifi_ssid, wifi_passwd); // Persist update
-			command_mode = CMD_COMMAND;
+			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
 			break;
 		case CMD_PASSWD:
+			// On this pass, the string is assumed to be the wifi password
 			strncpy(wifi_passwd, buffer, sizeof(wifi_passwd) - 1);
-			wifi_passwd[sizeof(wifi_passwd) - 1] = '\0';
+			wifi_passwd[sizeof(wifi_passwd) - 1] = '\0'; // Ensure null term.
 			printf("> Password updated.\n");
 			save_wifi_credentials(wifi_ssid, wifi_passwd); // Persist update
-			command_mode = CMD_COMMAND;
+			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
 		default:
 			// For now just do nothing. We should never get here.
@@ -279,27 +332,30 @@ void handle_command(const char* buffer, size_t length) {
  * @param byte Incoming stream byte from USB CDC.
  */
 void process_usb_byte(uint8_t byte) {
+	// A byte has come in via the USB-serial port. Let's decide what to do
+	// with it.
 	if (serial_mode == STATE_PRINTING) {
 		if (byte == PRT_MODE_END) {    // Code indicating end of print mode
-			serial_mode = STATE_COMMAND;
-			cmd_idx = 0;
+			serial_mode = STATE_COMMAND;	// Switch back to normal mode
+			cmd_idx = 0;					// Reset command index
 			printf("\n> EXIT PRINT MODE\n");
 		} else {
 			// Forward raw USB print byte to Core 1 via FIFO
 			send_print_byte_to_core1(byte);
 		}
-	} else if (serial_mode == STATE_COMMAND) {
+	} else if (serial_mode == STATE_COMMAND) { 	// The normal state of affairs
+		// WHat happens here depends on the value of the byte
 		switch (byte) {
 			case CHAR_CR:
 				// Do nothing. We're going to ignore carriage returns
 				break;
 			case CHAR_LF:
 				// This signals the end of a command.
-				cmd_buffer[cmd_idx] = '\0';
-				handle_command(cmd_buffer, cmd_idx);
+				cmd_buffer[cmd_idx] = '\0';		// Null terminate the string
+				handle_command(cmd_buffer, cmd_idx); 	// Act on the command
 				break;
 			default:
-				// Just add char to buffer (allowing all printable chars)
+				// Just add the character to the buffer
 				if (cmd_idx < sizeof(cmd_buffer) - 1) {
 					cmd_buffer[cmd_idx++] = (char)byte;
 				}
@@ -336,7 +392,7 @@ static err_t tcp_recv_callback(void* arg,
 		for (struct pbuf* q = p; q != NULL; q = q->next) {
 			uint8_t* src = (uint8_t*)q->payload;
 			for (int i = 0; i < q->len; i++) {
-				// TCP is ALWAYS in print mode. Safely transfer directly to
+				// TCP is ALWAYS in print mode. Transfer directly to
 				// Core 1 FIFO.
 				send_print_byte_to_core1(src[i]);
 			}
@@ -369,6 +425,7 @@ static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err) {
 			tcp_abort(newpcb);
 			return ERR_ABRT;
 		}
+		// Otherwise, grab the byte and pass the callback function to use
 		tcp_recv(newpcb, tcp_recv_callback);
 	}
 	return ERR_OK;
