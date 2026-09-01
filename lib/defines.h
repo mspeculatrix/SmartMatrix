@@ -6,6 +6,8 @@
 #ifndef __SMARTMATRIX_DEFINES_H__
 #define __SMARTMATRIX_DEFINES_H__
 
+#include "pico/multicore.h"
+
 #define VERSION_STR "Version 0.9.1"
 
  /** @brief Standard JetDirect / RAW TCP printing port */
@@ -82,6 +84,8 @@
 #define FIFO_MSG_JOB_END	0x02000000
 #define FIFO_MSG_BYTE_COUNT	0x03000000
 
+#define CMD_BUF_LEN 256
+
 /**
  * @brief State machine enum for parsing in-band printer control commands.
  */
@@ -113,5 +117,22 @@ enum ErrorState {
 };
 
 enum AutoFeed { AF_ON, AF_OFF };
+
+// -----------------------------------------------------------------------------
+// FIFO INLINE FUNCTIONS
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Sends messages over FIFO from Core 1 to Core 0
+ */
+inline void send_fifo_msg(uint32_t type, uint32_t payload) {
+	uint32_t msg = FIFO_TAG_MSG | type | (payload & FIFO_MSG_MASK_DATA);
+	multicore_fifo_push_blocking(msg);
+}
+
+inline void send_print_byte_to_core1(uint8_t byte) {
+	uint32_t msg = FIFO_TAG_DATA | (uint32_t)byte;
+	multicore_fifo_push_blocking(msg);
+}
 
 #endif

@@ -20,7 +20,7 @@ const char* system_status_msg[] = { "IDLE/READY", "PRINTING", "ERROR" };
 ErrorState current_err_state = ERR_NONE;
 
 /// @brief Serial mode - CLI/command or printing
-static SerialMode serial_mode = STATE_COMMAND; // Default to CLI mode
+SerialMode serial_mode = STATE_COMMAND; // Default to CLI mode
 
 /// @brief Wifi/network
 // Max SSID length is 32 bytes plus terminator (per 802.11 spec)
@@ -34,10 +34,13 @@ bool wifi_connected = false;
 const char* error_msg[] = { "OK", "OFFLINE", "ERROR", "PAPER OUT", "NO WIFI" };
 
 /// @brief In-band command accumulation buffer
-char cmd_buffer[256];
+char cmd_buffer[CMD_BUF_LEN];
 
 /// @brief String to hold IP address
 char ip_buf[IP_BUF_SIZE];
+
+/// @brief Current index within the command buffer
+size_t cmd_idx = 0;
 
 /// @brief Autofeed configuration
 AutoFeed autofeed_cfg = AF_OFF;                // Active low; Disabled by default
@@ -48,9 +51,6 @@ AutoFeed autofeed_cfg = AF_OFF;                // Active low; Disabled by defaul
 */
 volatile uint32_t total_job_bytes = 0;
 volatile bool is_printing = false;
-
-/// @brief Current index within the command buffer
-size_t cmd_idx = 0;
 
 /// @brief OLED display
 ssd1306_t display;

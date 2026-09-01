@@ -2,10 +2,17 @@
 
 This is firmware for the Raspberry Pi Pico 2W-based **SmartMatrix** adapter. This uses the microcontroller to convert serial or network input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III.
 
-The device is intended to work in two ways:
+**Network interface**: The Pico connects to your wifi and runs a socket server on port :9100 (chosen to be compatible with HP JetDirect devices). Any byte sent to the device's IP address on that port gets sent to the printer, no questions asked, no quarter given. All you need on your computer is a printer driver based on the JetDirect protocol and configured to output to the SmartMatrix's IP address. This is very simple to [set up on Linux using lpadmin](https://medium.com/machina-speculatrix/networking-a-dot-matrix-printer-eeda870f5728). Then, from that Linux box, assuming you've named the driver something like 'mx80' and you want to printer a file called 'myfile.txt', you enter on the command line:
 
-- **USB**: If you connect to it via USB it appears as a virtual com port. By default this offers a command interface that you can use to do things like set the wifi SSID and password. You can also print via serial (see below).
-- **TCP socket**: The code on Core 1 effectively emulates an HP DirectJet 500X device available over wifi. You send data via a TCP socket connection to port :9100. Each byte sent gets printed directly to the printer.
+```
+lp myfile.txt -d mx80
+```
+
+Your text will appear on the printer as if by magic, transported over the aether by wifi. No wires needed.
+
+You can also access this interface from any programs you write that want to, say, log data. I have a Go-based program running on my home server that handles printing files and I've written a front end to this on the home intranet server.
+
+**Serial interface**: Connect the Pico to your computer via a standard USB cable and it appears as a serial interface. If you fire up a terminal program such as Minicom, Coolterm or whatever people suffering under Windows use, and set it to 115,200 baud, 8N1, you'll find yourself talking to the command line interface (CLI) of the SmartMatrix. There's more information below.
 
 An I2C port is used for a small OLED screen (SSD1306).
 
@@ -27,7 +34,7 @@ Via this terminal, you can issue a number of commands. Currently we have:
 
 ### Serial Printing Mode
 
-If you send the string `PRT` down the serial connection, any further bytes sent to the SmartMatrix over the serial connection will get sent directly to the printer until you send an ASCII 0x04 character (End of Transmission, EOT).
+If you send the string `PRT` down the serial connection, any further bytes sent to the SmartMatrix over the serial connection will get forwarded directly to the printer until you send an ASCII 0x04 character (End of Transmission, EOT).
 
 This function is mostly meant for use with programs, but you can probably configure your terminal software to send an EOT (I did this using macros in Coolterm).
 
@@ -96,7 +103,7 @@ The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, so
 
 On the MX-80, DIP switch 2-3 can be used to 'fix' the `/AUTOFEED` setting. Factory default for the switch is OFF (which is how my printer has it). In effect, this allows the host to control this function.
 
-When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed after printing each line. The DIP switch setting is ORed with the signal on line 14. So if the DIP switch is set to OFF, the line is held high and then the host can either allow this to remain high (Autofeed disabled) or take it low (Autofeed enabled). If the DIP switch is set to ON, Autofeed is always disabled.
+When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed when it receives a carriage return. The DIP switch setting on the Epson is ORed with the signal on line 14. So if the DIP switch is set to OFF, the line is pulled high and then the host can either allow this to remain high (Autofeed disabled) or take it low (Autofeed enabled). If the DIP switch is set to ON, Autofeed is always disabled.
 
 ## VERSION HISTORY
 
@@ -105,7 +112,7 @@ Dates indicate when the dev branch code was merged into main.
 ### 0.9.1 IN PROGRESS
 
 - Changed serial connection so that it operates by default in CLI/command mode.
-- Created CLI commands to configure wifi and make connection.
+- Created CLI commands to configure wifi, make connection etc.
 - Added functionality to save wifi credentials to non-volatile memory.
 - Moved many functions out to library files.
 

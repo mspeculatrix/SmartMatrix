@@ -40,6 +40,7 @@ add_executable(
     lib/pico_ssd1306_basic.c
     lib/display_funcs.cpp
     lib/printer_funcs.cpp
+    lib/serial_funcs.cpp
     lib/wifi_funcs.cpp
 )
 
