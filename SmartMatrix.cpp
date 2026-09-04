@@ -32,11 +32,6 @@
 void core1_entry();
 void init_hardware();
 
-// FIFO functions
-inline void send_fifo_msg(uint32_t type, uint32_t payload);
-inline void send_print_byte_to_core1(uint8_t byte);
-void process_fifo_message(uint32_t msg);
-
 // TCP functions
 static err_t tcp_accept_callback(void* arg, struct tcp_pcb* newpcb, err_t err);
 static err_t tcp_recv_callback(void* arg, struct tcp_pcb* tpcb,
@@ -99,7 +94,7 @@ void core1_entry() {
 }
 
 /**
- * @brief Configures GPIO directional modes, pull-up/downs, and I2C peripherals.
+ * @brief Configures GPIO directional modes, pull-up/downs, and I2C interface.
  *
  * Initialises GPIO 0-7 for character data, output/input control lines for the
  * printer interface, and binds I2C0 to GPIO 20/21.
@@ -149,8 +144,8 @@ void init_hardware() {
 	i2c_init(I2C_PORT, 400 * 1000);
 	gpio_set_function(I2C_SDA_PIN, GPIO_FUNC_I2C);
 	gpio_set_function(I2C_SCL_PIN, GPIO_FUNC_I2C);
-	gpio_pull_up(I2C_SDA_PIN);
-	gpio_pull_up(I2C_SCL_PIN);
+	//gpio_pull_up(I2C_SDA_PIN);
+	//gpio_pull_up(I2C_SCL_PIN);
 	gpio_put(ACTIVITY_LED_PIN, 0);
 }
 
@@ -241,46 +236,58 @@ int main() {
 	// Initialise hardware lines and I2C peripheral first
 	init_hardware();
 	init_display();
-
-	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", "--");
+	snprintf(ip_buf, sizeof(ip_buf), "IP: %s", "--"); 	// Initial state
 
 	printf("\n: SMARTMATRIX INITIALISED (Core 0)\n");
 
-	// Initialise the CYW43439 wifi hardware stack FIRST
+	// ----- WIFI --------------------------------------------------------------
+
+	wifi_connected = false;					// Reset
+
+	// Initialise the CYW43439 wifi hardware stack first
 	printf(": Initialising WIFI system\n");
-	if (cyw43_arch_init_with_country(CYW43_COUNTRY('F', 'R', 0))) {
+	// if (cyw43_arch_init_with_country(CYW43_COUNTRY('F', 'R', 0))) {
+	if (cyw43_arch_init_with_country(CYW43_COUNTRY_WORLDWIDE)) {
+		// Returns an error code if failed, 0 if successful
 		printf("! ERR: CYW43 INIT FAILED\n");
-		return -1;
-	}
 
-	// Enable station (client) mode
-	cyw43_arch_enable_sta_mode();
+	} else {									// Successful connection
+		// Enable station (client) mode
+		cyw43_arch_enable_sta_mode();
+		// Disable power-save modes to optimise DHCP & TCP negotiation speed
+		cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
 
-	netif_set_hostname(netif, NET_IF_HOSTNAME);
+		netif_set_hostname(netif, NET_IF_HOSTNAME);
 
-	// Disable power-save sleep modes to optimise DHCP & TCP negotiation speed
-	cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
-
-	bool wifi_configured = load_wifi_credentials(wifi_ssid, wifi_passwd);
-	if (wifi_configured) {
-		printf(": WIFI is configured\n");
-		if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
-			wifi_connected = true;
-			display_status(STATUS_IDLE, 0);				// Default status
-		}
-	} else {
-		// What's in the variables read from the wifi_creds.h file?
-		// Check the SSID setting (not password because user might be using an
-		// open wifi setup).
-		if (strlen(wifi_ssid) > 0) {
-			// We have something, so attempt a connection
+		// Try reading the wifi credentials from non-volatile flash memory
+		bool wifi_configured = load_wifi_credentials(wifi_ssid, wifi_passwd);
+		if (wifi_configured) {	// Creds have been stored in flash already
+			printf(": WIFI is configured\n");
 			if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
-				// Successful, so let's save to non-volatile memory
-				save_wifi_credentials(wifi_ssid, wifi_passwd);
 				wifi_connected = true;
+				display_status(STATUS_IDLE, 0);				// Default status
+			}
+		} else {
+			// No stored creds. Let's see what was read in from the wifi_creds.h
+			// file during compilation.
+			// Check the SSID setting (not password because user might be using
+			// an open wifi setup).
+			if (strlen(wifi_ssid) > 0) {
+				// We have something, so attempt a connection
+				if (wifi_connect(wifi_ssid, wifi_passwd, netif) == 0) {
+					// Successful - save to non-volatile memory for next time
+					save_wifi_credentials(wifi_ssid, wifi_passwd);
+					wifi_connected = true;
+				}
 			}
 		}
 	}
+
+	if (!wifi_connected) {
+		display_status(STATUS_ERROR, ERR_WIFI);
+	}
+
+	// ----- TCP SOCKET SERVER -------------------------------------------------
 
 	// Initialise RAW TCP Port 9100 Server using background thread-safe locks
 	cyw43_arch_lwip_begin();
@@ -293,6 +300,8 @@ int main() {
 		}
 	}
 	cyw43_arch_lwip_end();
+
+	// ----- MAIN LOOPS --------------------------------------------------------
 
 	// Launch dedicated printer worker core (Core 1)
 	multicore_launch_core1(core1_entry);
@@ -316,9 +325,9 @@ int main() {
 			}
 		}
 
-		poll_printer_status();
+		poll_printer_status();				// Check for error states
 
-		sleep_ms(1); // Yield execution slot
+		sleep_ms(1); 						// Yield execution slot
 	}
 
 	return 0;

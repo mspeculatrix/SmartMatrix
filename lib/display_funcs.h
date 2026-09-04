@@ -24,7 +24,7 @@ void display_activity(const char* header, const char* activity,
 void display_AF(void);
 void display_SSID(void);
 void display_IP(void);
-void display_status(uint8_t state, uint32_t data);
+void display_status(SystemStatus state, uint32_t data);
 
 
 #endif

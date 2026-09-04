@@ -14,13 +14,50 @@
  // GLOBAL STATE
  // =============================================================================
 
- /// @brief System state
+// ----- FOR NEXT VERSION ------------------------------------------------------
+// SystemContext* sys_ctx = new SystemContext{};
+// NetworkContext* net_ctx = new NetworkContext{};
+
+// int app_init(void) {
+// 	if (sys_ctx && net_ctx) {
+// 		// Initialize system context fields
+// 		sys_ctx->cmd_idx = 0;
+// 		sys_ctx->system_status = STATUS_IDLE;
+// 		sys_ctx->serial_mode = STATE_COMMAND;
+// 		sys_ctx->current_err_state = ERR_NONE;
+// 		sys_ctx->system_status_msg[0] = "IDLE/READY";
+// 		sys_ctx->system_status_msg[1] = "PRINTING";
+// 		sys_ctx->system_status_msg[2] = "ERROR";
+// 		sys_ctx->autofeed_cfg = AF_OFF;
+
+// 		// Initialize network context fields
+// 		net_ctx->netif = &cyw43_state.netif[CYW43_ITF_STA];
+// 		net_ctx->wifi_connected = false;
+// 		snprintf(net_ctx->ip_buf, sizeof(net_ctx->ip_buf), "--");
+// 		strncpy(net_ctx->wifi_ssid, WIFI_SSID, sizeof(net_ctx->wifi_ssid) - 1);
+// 		// Ensure null-termination
+// 		net_ctx->wifi_ssid[sizeof(net_ctx->wifi_ssid) - 1] = '\0';
+// 		strncpy(net_ctx->wifi_passwd, WIFI_PASSWORD, sizeof(net_ctx->wifi_passwd) - 1);
+// 		// Ensure null-termination
+// 		net_ctx->wifi_passwd[sizeof(net_ctx->wifi_passwd) - 1] = '\0';
+// 	} else {
+// 		printf("! ERR: App init failed\n");
+// 		return -1;
+// 	}
+// 	return 0;
+// }
+
+
+
+/// @brief System state
 SystemStatus system_status = STATUS_IDLE;
 const char* system_status_msg[] = { "IDLE/READY", "PRINTING", "ERROR" };
 ErrorState current_err_state = ERR_NONE;
 
 /// @brief Serial mode - CLI/command or printing
 SerialMode serial_mode = STATE_COMMAND; // Default to CLI mode
+
+
 
 /// @brief Wifi/network
 // Max SSID length is 32 bytes plus terminator (per 802.11 spec)

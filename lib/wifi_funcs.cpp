@@ -21,7 +21,7 @@ bool load_wifi_credentials(char* ssid_out, char* passwd_out) {
 }
 
 /**
- * @brief Erases flash sector and writes new Wi-Fi credentials.
+ * @brief Erases flash sector and writes new wifi credentials.
  */
 void save_wifi_credentials(const char* ssid, const char* passwd) {
 	WifiCredentials config;
@@ -49,6 +49,13 @@ void save_wifi_credentials(const char* ssid, const char* passwd) {
 	printf(": Wi-Fi credentials saved successfully.\n");
 }
 
+/**
+ * @brief Connect to wifi using configured credentials
+ * @param ssid Wifi SSID string
+ * @param passwd Wifi password string
+ * @param iface pointer to netif interface instance
+ * @return int Error code
+ */
 int wifi_connect(char* ssid, char* passwd, struct netif* iface) {
 	printf(": WIFI connecting to %s\n", ssid);
 

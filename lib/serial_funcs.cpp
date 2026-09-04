@@ -7,15 +7,16 @@
  * @param length Length of the string in bytes.
  */
 void handle_command(const char* buffer, size_t length) {
+	// The first time through, the string passed in the buffer is assumed
+	// to be a command. We make command_mode static because, in some cases,
+	// we'll want to change it to something else in order to parse
+	// parameters.
 	static CommandState command_mode = CMD_COMMAND;
-	// char msgbuf[20];
-	// snprintf(msgbuf, sizeof(msgbuf), "mode: %u\n", command_mode);
-	// printf(msgbuf);
+
 	switch (command_mode) {
 		case CMD_COMMAND:
 			if (strncmp(buffer, "STAT", length) == 0) {
 				// Status report
-				printf("STATUS: ");
 				printf("\nSMARTMATRIX %s\n", VERSION_STR);
 				if (system_status != STATUS_ERROR) {
 					printf(system_status_msg[system_status]);
@@ -23,29 +24,35 @@ void handle_command(const char* buffer, size_t length) {
 					printf(error_msg[current_err_state]);
 				}
 				printf("\n");
+
 				if (gpio_get(SELECT_PIN) == 0) {		// Printer is offline
 					printf("- Printer offline\n");
 				} else {
 					printf("- Printer online\n");
 				}
+
 				if (gpio_get(ERROR_PIN) == 0) {	// Printer indicates an error
 					printf("- Printer indicating an error\n");
 				}
+
 				if (gpio_get(PAPER_END_PIN) == 1) {		// Paper end condition
 					printf("- Printer indicating paper out\n");
 				}
 				printf("Autofeed ");
+
 				if (autofeed_cfg == AF_ON) {
 					printf("ON\n");
 				} else {
 					printf("OFF\n");
 				}
+
 				printf("Wifi SSID: %s\n", wifi_ssid);
 				printf("Wifi password ");
 				if (strlen(wifi_passwd) == 0) {
-					printf("not");
+					printf("not ");
 				}
-				printf(" configured\n");
+				printf("configured\n");
+				printf("%s\n", ip_buf);
 
 			} else if (strncmp(buffer, "HELP", length) == 0) {
 				// Request for help message
@@ -60,6 +67,7 @@ void handle_command(const char* buffer, size_t length) {
 				printf("PASSWD  Enter Wifi password\n");
 				printf("SSID    Enter Wifi SSID\n");
 				printf("\n");
+
 			} else if (strncmp(buffer, "RESET", length) == 0) {
 				// Request to reset the printer (not the SmartMatrix)
 				if (system_status == STATUS_IDLE) {
@@ -73,6 +81,7 @@ void handle_command(const char* buffer, size_t length) {
 				} else {
 					printf("! ERR: Printer busy or offline.\n");
 				}
+
 			} else if (strncmp(buffer, "PRT", length) == 0) {
 				// Switch into serial printing mode
 				if (system_status == STATUS_IDLE) {
@@ -81,6 +90,7 @@ void handle_command(const char* buffer, size_t length) {
 				} else {
 					printf("ERR: Printer not available.\n");
 				}
+
 			} else if (strncmp(buffer, "CONN", length) == 0) {
 				// Connect to wifi
 				wifi_connected = false;					// Reset
@@ -91,28 +101,36 @@ void handle_command(const char* buffer, size_t length) {
 					display_status(STATUS_ERROR, ERR_WIFI);
 					sleep_ms(3000); // Give user a chance to read the message
 				}
+
+			} else if (strncmp(buffer, "IP", length) == 0) {
+				printf("IP: %s\n", ip_buf);
+
 			} else if (strncmp(buffer, "SSID", length) == 0) {
 				// Request to set SSID for wifi. The password will be
 				// assumed to be the next string processed by this function.
 				command_mode = CMD_SSID;
 				printf("> ENTER WIFI SSID: ");        // Prompt
+
 			} else if (strncmp(buffer, "PASSWD", length) == 0) {
 				// Request to set password for wifi. The password will be
 				// assumed to be the next string processed by this function.
 				command_mode = CMD_PASSWD;
 				printf("> ENTER WIFI PASSWORD: ");    // Prompt
+
 			} else if (strncmp(buffer, "AF_ON", length) == 0) {
 				// Request to turn Autofeed on
 				printf("> AUTOFEED ON\n");
 				autofeed_cfg = AF_ON;
 				gpio_put(AUTOFEED_PIN, autofeed_cfg);
 				display_AF();
+
 			} else if (strncmp(buffer, "AF_OFF", length) == 0) {
 				// Request to turn Autofeed off
 				printf("> AUTOFEED OFF\n");
 				autofeed_cfg = AF_OFF;
 				display_AF();
 				gpio_put(AUTOFEED_PIN, autofeed_cfg);
+
 			} else {
 				// Nothing matched, so...
 				printf("! ERR: UNKNOWN COMMAND\n");

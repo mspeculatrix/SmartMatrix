@@ -19,10 +19,6 @@ extern char cmd_buffer[CMD_BUF_LEN];
 extern size_t cmd_idx;
 extern struct netif* netif;
 
-// Prototype for function in SmartMatrix.cpp
-void send_print_byte_to_core1(uint8_t byte);
-
-// Prototypes for this library
 void handle_command(const char* buffer, size_t length);
 void process_fifo_message(uint32_t msg);
 void process_usb_byte(uint8_t byte);

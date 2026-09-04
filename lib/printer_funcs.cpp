@@ -2,11 +2,12 @@
 
 /**
  * @brief Check signals from printer for any error states
- * @return int ErrorState code
+ * @return ErrorState error code
+ *
+ * Checks /ERROR, PE and SELECT signals, in that order.
  */
 ErrorState check_for_error(void) {
 	ErrorState err_state = ERR_NONE;
-	// Check /ERROR, PE and SELECT signals, in that order
 
 	if (gpio_get(ERROR_PIN) == 0) {			// Printer is indicating an error
 		err_state = ERR_GEN;
@@ -29,7 +30,7 @@ ErrorState check_for_error(void) {
 void poll_printer_status(void) {
 	ErrorState new_err = check_for_error();
 
-	// Only update state if error status actually changes
+	// Update state only if error status actually changes
 	if (new_err != current_err_state) {
 		current_err_state = new_err;
 
@@ -54,19 +55,20 @@ void poll_printer_status(void) {
  * @brief Transmits a single byte to the printer using Centronics handshake.
  *
  * Checks the printer BUSY line, places the data byte on the bus, and asserts
- * the STROBE line for the required timing duration.
+ * the /STROBE line for the required timing duration.
  *
  * @param character The 8-bit ASCII or binary byte to send.
  */
 void send_byte_to_printer(uint8_t character) {
-	// Toggle LED to indicate bit-banging activity
+	// Light up LED to indicate activity
 	gpio_put(ACTIVITY_LED_PIN, 1);
 
-	// Block until printer is READY: Signals whose conditions must be:
-	// - BUSY   - LOW
-	// - SELECT - HIGH
-	// - /ERROR - HIGH
-	// - PE     - LOW
+	/* Block until printer is ready. Signal conditions must be:
+		BUSY   - LOW
+		SELECT - HIGH
+		/ERROR - HIGH
+		PE     - LOW
+	*/
 	while (gpio_get(BUSY_PIN) || !gpio_get(SELECT_PIN)
 		|| gpio_get(PAPER_END_PIN) || !gpio_get(ERROR_PIN)) {
 		tight_loop_contents(); // Microcontroller spinlock hint
