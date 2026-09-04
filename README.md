@@ -109,12 +109,13 @@ When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed when it
 
 Dates indicate when the dev branch code was merged into main.
 
-### 0.9.1 IN PROGRESS
+### 0.9.2 04/09/2026
 
 - Changed serial connection so that it operates by default in CLI/command mode.
 - Created CLI commands to configure wifi, make connection etc.
 - Added functionality to save wifi credentials to non-volatile memory.
 - Moved many functions out to library files.
+- Tested on SmartMatrix B2 board. All seems tickety-boo.
 
 ### 0.9.0 26/08/2026
 
