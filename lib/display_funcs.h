@@ -12,19 +12,15 @@
 #include "pico_ssd1306_basic.h"
 
 extern ssd1306_t display;
-extern AutoFeed autofeed_cfg;
-extern char ip_buf[20];
-extern const char* error_msg[];
-extern char wifi_ssid[];
-extern bool wifi_connected;
 
-void init_display();
+void init_display(void);
 void display_activity(const char* header, const char* activity,
 	const char* status);
-void display_AF(void);
-void display_SSID(void);
-void display_IP(void);
-void display_status(SystemStatus state, uint32_t data);
+void display_AF(SystemContext* sys);
+void display_SSID(NetworkContext* net);
+void display_IP(NetworkContext* net);
+void display_status(SystemContext* sys, NetworkContext* net, SystemStatus state,
+	uint32_t data);
 
 
 #endif

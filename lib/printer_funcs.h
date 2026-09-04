@@ -13,13 +13,8 @@
 #include "defines.h"
 #include "display_funcs.h"
 
-extern ErrorState current_err_state;
-extern volatile bool is_printing;
-extern SystemStatus system_status;
-extern volatile uint32_t total_job_bytes;
-
 ErrorState check_for_error(void);
-void poll_printer_status(void);
+void poll_printer_status(SystemContext* sys, NetworkContext* net);
 void send_byte_to_printer(uint8_t character);
 
 #endif

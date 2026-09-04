@@ -27,25 +27,25 @@ ErrorState check_for_error(void) {
  * State changes now persist correctly, protecting STATUS_PRINTING from
  * being cleared on every loop iteration.
  */
-void poll_printer_status(void) {
+void poll_printer_status(SystemContext* sys, NetworkContext* net) {
 	ErrorState new_err = check_for_error();
 
 	// Update state only if error status actually changes
-	if (new_err != current_err_state) {
-		current_err_state = new_err;
+	if (new_err != sys->current_err_state) {
+		sys->current_err_state = new_err;
 
-		if (current_err_state != ERR_NONE) {
-			system_status = STATUS_ERROR;
-			display_status(STATUS_ERROR, current_err_state);
+		if (sys->current_err_state != ERR_NONE) {
+			sys->system_status = STATUS_ERROR;
+			display_status(sys, net, STATUS_ERROR, sys->current_err_state);
 		} else {
 			// Error cleared: restore printing or idle state based on active
 			// job flag
-			if (is_printing) {
-				system_status = STATUS_PRINTING;
-				display_status(STATUS_PRINTING, total_job_bytes);
+			if (sys->is_printing) {
+				sys->system_status = STATUS_PRINTING;
+				display_status(sys, net, STATUS_PRINTING, sys->total_job_bytes);
 			} else {
-				system_status = STATUS_IDLE;
-				display_status(STATUS_IDLE, 0);
+				sys->system_status = STATUS_IDLE;
+				display_status(sys, net, STATUS_IDLE, 0);
 			}
 		}
 	}

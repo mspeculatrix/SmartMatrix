@@ -125,24 +125,27 @@ enum ErrorState {
 /// @brief Setting of Autofeed signal
 enum AutoFeed { AF_ON, AF_OFF };
 
-/// @brief Context structs ----- FOR NEXT VERSION -----------------------------
-// typedef struct {
-// 	SystemStatus system_status;
-// 	SerialMode serial_mode;
-// 	ErrorState current_err_state;
-// 	const char* system_status_msg[3];
-// 	char cmd_buffer[CMD_BUF_LEN];
-// 	size_t cmd_idx;
-// 	AutoFeed autofeed_cfg;
-// } SystemContext;
+/// @brief Context structs
+typedef struct {
+	SystemStatus system_status;
+	SerialMode serial_mode;
+	const char* error_msg[5];
+	ErrorState current_err_state;
+	const char* system_status_msg[3];
+	char cmd_buffer[CMD_BUF_LEN];
+	size_t cmd_idx;
+	AutoFeed autofeed_cfg;
+	volatile uint32_t total_job_bytes;	// volatile as shared across cores
+	volatile bool is_printing; 			// volatile as shared across cores
+} SystemContext;
 
-// typedef struct {
-// 	char wifi_passwd[WIFI_PASS_LEN + 1];
-// 	char wifi_ssid[WIFI_SSID_LEN + 1];
-// 	char ip_buf[IP_BUF_SIZE];
-// 	bool wifi_connected;
-// 	struct netif* netif;
-// } NetworkContext;
+typedef struct {
+	char wifi_passwd[WIFI_PASS_LEN + 1];
+	char wifi_ssid[WIFI_SSID_LEN + 1];
+	char ip_buf[IP_BUF_SIZE];
+	bool wifi_connected;
+	struct netif* netif;
+} NetworkContext;
 
 /// @section FIFO inline functions
 

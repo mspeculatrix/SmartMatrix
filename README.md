@@ -109,6 +109,10 @@ When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed when it
 
 Dates indicate when the dev branch code was merged into main.
 
+### 0.9.3 IN PROGRESS
+
+- Refactored most functions to use system and network context structs.
+
 ### 0.9.2 04/09/2026
 
 - Changed serial connection so that it operates by default in CLI/command mode.

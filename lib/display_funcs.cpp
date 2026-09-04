@@ -3,7 +3,7 @@
 /**
  * @brief Initialises the SSD1306 display over I2C
  */
-void init_display() {
+void init_display(void) {
 	ssd1306_init(&display, I2C_PORT);			// Device init
 	// Clear display then show boot message
 	ssd1306_clear(&display);
@@ -27,10 +27,12 @@ void display_activity(const char* header, const char* activity,
 
 /**
  * @brief Prints status info
- * @param SystemStatus Status code
+ * $param sys Pointer to global SystemContext
+ * @param net Pointer to global NetworkContext
  * @param data Integer: byte count or error code
  */
-void display_status(SystemStatus state, uint32_t data) {
+void display_status(SystemContext* sys, NetworkContext* net, SystemStatus state,
+	uint32_t data) {
 	ssd1306_clear(&display);
 	bool show_bytes = false;
 
@@ -42,7 +44,7 @@ void display_status(SystemStatus state, uint32_t data) {
 		show_bytes = true;
 	} else if (state == STATUS_ERROR) {
 		// ErrorState code is passed in the data parameter
-		ssd1306_printstr_double(&display, 0, 0, error_msg[data]);
+		ssd1306_printstr_double(&display, 0, 0, sys->error_msg[data]);
 	}
 
 	if (show_bytes) {
@@ -53,9 +55,9 @@ void display_status(SystemStatus state, uint32_t data) {
 		ssd1306_printstr_double(&display, 48, 24, count_buf);
 	}
 
-	display_AF();						// Autofeed setting
-	display_SSID();						// Wifi SSID currently configured
-	display_IP();						// Current IP address
+	display_AF(sys);						// Autofeed setting
+	display_SSID(net);						// Wifi SSID currently configured
+	display_IP(net);						// Current IP address
 
 	ssd1306_show(&display);
 }
@@ -63,9 +65,9 @@ void display_status(SystemStatus state, uint32_t data) {
 /**
  * @brief Display current Autofeed setting
  */
-void display_AF(void) {
+void display_AF(SystemContext* sys) {
 	char stat_msg[9];
-	if (autofeed_cfg == AF_ON) {
+	if (sys->autofeed_cfg == AF_ON) {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AUTOFEED");
 	} else {
 		snprintf(stat_msg, sizeof(stat_msg), "%s", "AF off");
@@ -77,9 +79,9 @@ void display_AF(void) {
 /**
  * @brief Display current IP address
  */
-void display_IP(void) {
-	if (wifi_connected) {
-		ssd1306_println(&display, 7, ip_buf);
+void display_IP(NetworkContext* net) {
+	if (net->wifi_connected) {
+		ssd1306_println(&display, 7, net->ip_buf);
 	} else {
 		ssd1306_println(&display, 7, "NO WIFI");
 	}
@@ -89,7 +91,7 @@ void display_IP(void) {
 /**
  * @brief Display currently configured SSID
  */
-void display_SSID(void) {
-	ssd1306_println(&display, 6, wifi_ssid);
+void display_SSID(NetworkContext* net) {
+	ssd1306_println(&display, 6, net->wifi_ssid);
 	ssd1306_show(&display);
 }
