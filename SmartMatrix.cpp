@@ -59,10 +59,10 @@ int app_init(void) {
 		sys_ctx->system_status_msg[1] = "PRINTING";
 		sys_ctx->system_status_msg[2] = "ERROR";
 		sys_ctx->error_msg[0] = "OK";
-		sys_ctx->error_msg[0] = "OFFLINE";
-		sys_ctx->error_msg[0] = "ERROR";
-		sys_ctx->error_msg[0] = "PAPER OUT";
-		sys_ctx->error_msg[0] = "NO WIFI";
+		sys_ctx->error_msg[1] = "OFFLINE";
+		sys_ctx->error_msg[2] = "ERROR";
+		sys_ctx->error_msg[3] = "PAPER OUT";
+		sys_ctx->error_msg[4] = "NO WIFI";
 
 		sys_ctx->autofeed_cfg = AF_OFF;
 		sys_ctx->total_job_bytes = 0;
@@ -169,7 +169,7 @@ void init_hardware() {
 	// Set default idle signal states (Centronics active-low idle voltages)
 	gpio_put(STROBE_PIN, 1);        // Idle high
 	gpio_put(INIT_PIN, 1);          // Idle high (no reset)
-	gpio_put(AUTOFEED_PIN, sys_ctx->autofeed_cfg);
+	gpio_put(AUTOFEED_PIN, AF_OFF);
 	gpio_put(ACTIVITY_LED_PIN, 1);  // On, but probably not long enough to see
 	gpio_put(WIFI_LED_PIN, 0);      // Off by default
 
@@ -281,102 +281,107 @@ int main() {
 	sleep_ms(3000); // USB CDC serial console settling delay
 
 	// Initialise hardware lines and I2C peripheral first
-	app_init(); 		// Set up global contexts
 	init_hardware();
 	init_display();
-	snprintf(net_ctx->ip_buf, sizeof(net_ctx->ip_buf), "IP: %s", "--");
 
-	printf("\n: SMARTMATRIX INITIALISED (Core 0)\n");
+	if (app_init() == 0) {
+		snprintf(net_ctx->ip_buf, sizeof(net_ctx->ip_buf), "IP: %s", "--");
 
-	// ----- WIFI --------------------------------------------------------------
+		printf("\n: SMARTMATRIX INITIALISED (Core 0)\n");
 
-	net_ctx->wifi_connected = false;					// Reset
+		// ----- WIFI ----------------------------------------------------------
 
-	// Initialise the CYW43439 wifi hardware stack first
-	printf(": Initialising WIFI system\n");
-	// if (cyw43_arch_init_with_country(CYW43_COUNTRY('F', 'R', 0))) {
-	if (cyw43_arch_init_with_country(CYW43_COUNTRY_WORLDWIDE)) {
-		// Returns an error code if failed, 0 if successful
-		printf("! ERR: CYW43 INIT FAILED\n");
+		net_ctx->wifi_connected = false;					// Reset
 
-	} else {										// Successful connection
-		// Enable station (client) mode
-		cyw43_arch_enable_sta_mode();
-		// Disable power-save modes to optimise DHCP & TCP negotiation speed
-		cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
+		// Initialise the CYW43439 wifi hardware stack first
+		printf(": Initialising WIFI system\n");
+		// if (cyw43_arch_init_with_country(CYW43_COUNTRY('F', 'R', 0))) {
+		if (cyw43_arch_init_with_country(CYW43_COUNTRY_WORLDWIDE)) {
+			// Returns an error code if failed, 0 if successful
+			printf("! ERR: CYW43 INIT FAILED\n");
 
-		netif_set_hostname(net_ctx->netif, NET_IF_HOSTNAME);
+		} else {										// Successful connection
+			// Enable station (client) mode
+			cyw43_arch_enable_sta_mode();
+			// Disable power-save modes to optimise DHCP & TCP negotiation speed
+			cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
 
-		// Try reading the wifi credentials from non-volatile flash memory
-		bool wifi_configured = load_wifi_credentials(net_ctx);
-		if (wifi_configured) {	// Creds have been stored in flash already
-			printf(": WIFI is configured\n");
-			if (wifi_connect(net_ctx) == 0) {
-				net_ctx->wifi_connected = true;
-				display_status(sys_ctx, net_ctx, STATUS_IDLE, 0); // Default
-			}
-		} else {
-			// No stored creds. Let's see what was read in from the wifi_creds.h
-			// file during compilation.
-			// Check the SSID setting (not password because user might be using
-			// an open wifi setup).
-			if (strlen(net_ctx->wifi_ssid) > 0) {
-				// We have something, so attempt a connection
+			netif_set_hostname(net_ctx->netif, NET_IF_HOSTNAME);
+
+			// Try reading the wifi credentials from non-volatile flash memory
+			bool wifi_configured = load_wifi_credentials(net_ctx);
+			if (wifi_configured) {	// Creds have been stored in flash already
+				printf(": WIFI is configured\n");
 				if (wifi_connect(net_ctx) == 0) {
-					// Successful - save to non-volatile memory for next time
-					save_wifi_credentials(net_ctx);
 					net_ctx->wifi_connected = true;
+					display_status(sys_ctx, net_ctx, STATUS_IDLE, 0); // Default
+				}
+			} else {
+				// No stored creds. Let's see what was read in from the
+				// wifi_creds.h file during compilation.
+				// Check the SSID setting (not password because user might be
+				// using an open wifi setup).
+				if (strlen(net_ctx->wifi_ssid) > 0) {
+					// We have something, so attempt a connection
+					if (wifi_connect(net_ctx) == 0) {
+						// Successful: save to non-volatile memory for next time
+						save_wifi_credentials(net_ctx);
+						net_ctx->wifi_connected = true;
+					}
 				}
 			}
 		}
-	}
 
-	if (!net_ctx->wifi_connected) {
-		display_status(sys_ctx, net_ctx, STATUS_ERROR, ERR_WIFI);
-	}
-
-	// ----- TCP SOCKET SERVER -------------------------------------------------
-
-	// Initialise RAW TCP Port 9100 Server using background thread-safe locks
-	cyw43_arch_lwip_begin();
-	struct tcp_pcb* pcb = tcp_new();
-	if (pcb != NULL) {
-		if (tcp_bind(pcb, IP_ADDR_ANY, TCP_PORT) == ERR_OK) {
-			pcb = tcp_listen(pcb);
-			tcp_accept(pcb, tcp_accept_callback);
-			printf(": TCP server listening\n");
-		}
-	}
-	cyw43_arch_lwip_end();
-
-	// ----- MAIN LOOPS --------------------------------------------------------
-
-	// Launch dedicated printer worker core (Core 1)
-	multicore_launch_core1(core1_entry);
-
-	// Core 0 execution loop: handles USB CDC serial backup input and FIFO msgs
-	while (true) {
-		// Non-blocking poll for local USB Serial terminal bytes
-		int usb_char = getchar_timeout_us(0);
-		if (usb_char != PICO_ERROR_TIMEOUT) {
-			// Pass incoming USB bytes to process_usb_byte on Core 0 context
-			process_usb_byte(sys_ctx, net_ctx, (uint8_t)usb_char);
+		if (!net_ctx->wifi_connected) {
+			display_status(sys_ctx, net_ctx, STATUS_ERROR, ERR_WIFI);
 		}
 
-		// FIFO message processing from Core 1
-		if (multicore_fifo_rvalid()) {
-			uint32_t msg = multicore_fifo_pop_blocking();
+		// ----- TCP SOCKET SERVER ---------------------------------------------
 
-			// Core 0 processes FIFO messages tagged as messages (Bit 31 = 1)
-			if ((msg & 0x80000000) == FIFO_TAG_MSG) {
-				process_fifo_message(sys_ctx, net_ctx, msg);
+		// Initialise RAW TCP port 9100 server with background thread-safe locks
+		cyw43_arch_lwip_begin();
+		struct tcp_pcb* pcb = tcp_new();
+		if (pcb != NULL) {
+			if (tcp_bind(pcb, IP_ADDR_ANY, TCP_PORT) == ERR_OK) {
+				pcb = tcp_listen(pcb);
+				tcp_accept(pcb, tcp_accept_callback);
+				printf(": TCP server listening\n");
 			}
 		}
+		cyw43_arch_lwip_end();
 
-		poll_printer_status(sys_ctx, net_ctx);		// Check for error states
+		// ----- MAIN LOOPS ----------------------------------------------------
 
-		sleep_ms(1); 								// Yield execution slot
+		// Launch dedicated printer worker core (Core 1)
+		multicore_launch_core1(core1_entry);
+
+		// Core 0 exec loop: handles USB CDC serial backup input and FIFO msgs
+		while (true) {
+			// Non-blocking poll for local USB Serial terminal bytes
+			int usb_char = getchar_timeout_us(0);
+			if (usb_char != PICO_ERROR_TIMEOUT) {
+				// Pass incoming USB bytes to process_usb_byte on Core 0 context
+				process_usb_byte(sys_ctx, net_ctx, (uint8_t)usb_char);
+			}
+
+			// FIFO message processing from Core 1
+			if (multicore_fifo_rvalid()) {
+				uint32_t msg = multicore_fifo_pop_blocking();
+
+				// Core 0 processes FIFO messages (Bit 31 = 1)
+				if ((msg & 0x80000000) == FIFO_TAG_MSG) {
+					process_fifo_message(sys_ctx, net_ctx, msg);
+				}
+			}
+
+			poll_printer_status(sys_ctx, net_ctx);	// Check for error states
+
+			sleep_ms(1); 							// Yield execution slot
+		}
+	} else {
+		printf("! FATAL - App failed to initialise.");
+		return -1;
 	}
 
-	return 0;
+	return 0;								// Don't imagine we'll ever get here
 }

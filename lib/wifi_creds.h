@@ -9,5 +9,6 @@
  * USB) connection and the commands SSID and PASSWD. The new credentials you
  * enter that way will be saved to non-volatile memory.
  */
+
 #define WIFI_SSID     ""
 #define WIFI_PASSWORD ""

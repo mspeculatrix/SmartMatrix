@@ -17,6 +17,7 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 	size_t length = sizeof(sys->cmd_buffer);
 
 	switch (command_mode) {
+
 		case CMD_COMMAND:
 			if (strncmp(sys->cmd_buffer, "STAT", length) == 0) {
 				// Status report
@@ -139,23 +140,26 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 				printf("! ERR: UNKNOWN COMMAND\n");
 			}
 			break;
+
 		case CMD_SSID:
 			// On this pass, the string is assumed to be the wifi SSID
 			strncpy(net->wifi_ssid, sys->cmd_buffer, sizeof(net->wifi_ssid) - 1);
 			net->wifi_ssid[sizeof(net->wifi_ssid) - 1] = '\0'; // Ensure null
 			printf("> SSID set to: %s\n", net->wifi_ssid);
-			save_wifi_credentials(net); // Persist update
+			save_wifi_credentials(net); 		// Persist update
 			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
 			break;
+
 		case CMD_PASSWD:
 			// On this pass, the string is assumed to be the wifi password
 			strncpy(net->wifi_passwd, sys->cmd_buffer, sizeof(net->wifi_passwd) - 1);
 			net->wifi_passwd[sizeof(net->wifi_passwd) - 1] = '\0';
 			printf("> Password updated.\n");
-			save_wifi_credentials(net); // Persist update
+			save_wifi_credentials(net); 		// Persist update
 			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
+
 		default:
 			// For now just do nothing. We should never get here.
 			printf("ERR: Unexpected command mode!\n");
@@ -163,6 +167,7 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 	}
 	sys->cmd_idx = 0;
 }
+
 
 /**
  * @brief Processes incoming FIFO messages from Core 1 on Core 0.
@@ -191,6 +196,7 @@ void process_fifo_message(SystemContext* sys,
 	}
 }
 
+
 /**
  * @brief Evaluates bytes specifically from USB CDC (Serial) on Core 0.
  *
@@ -203,16 +209,20 @@ void process_usb_byte(SystemContext* sys, NetworkContext* net, uint8_t byte) {
 	// A byte has come in via the USB-serial port. Let's decide what to do
 	// with it.
 	if (sys->serial_mode == STATE_PRINTING) {
+
 		if (byte == PRT_MODE_END) {    // Code indicating end of print mode
 			sys->serial_mode = STATE_COMMAND;	// Switch back to normal mode
 			sys->cmd_idx = 0;					// Reset command index
 			printf("\n> EXIT PRINT MODE\n");
 		} else {
 			// Forward raw USB print byte to Core 1 via FIFO
-			send_print_byte_to_core1(byte);
+			if (byte >= PRINTABLE_START && byte <= PRINTABLE_END) {
+				send_print_byte_to_core1(byte);
+			}
 		}
+
 	} else if (sys->serial_mode == STATE_COMMAND) { 	// The normal state
-		// WHat happens here depends on the value of the byte
+
 		switch (byte) {
 			case CHAR_CR:
 				// Do nothing. We're going to ignore carriage returns
@@ -225,7 +235,7 @@ void process_usb_byte(SystemContext* sys, NetworkContext* net, uint8_t byte) {
 				handle_command(sys, net);
 				break;
 			default:
-				// Just add the character to the buffer
+				// Just add the character to the command buffer
 				if (sys->cmd_idx < sizeof(sys->cmd_buffer) - 1) {
 					sys->cmd_buffer[sys->cmd_idx++] = (char)byte;
 				}
