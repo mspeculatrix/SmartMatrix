@@ -2,6 +2,8 @@
 
 This is firmware for the Raspberry Pi Pico 2W-based **SmartMatrix** adapter. This uses the microcontroller to convert serial or network input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III.
 
+![Epson MX-80](img/SmartMatrix_front_view.jpg)The SmartMatrix board.
+
 **Network interface**: The Pico connects to your wifi and runs a socket server on port :9100 (chosen to be compatible with HP JetDirect devices). Any byte sent to the device's IP address on that port gets sent to the printer, no questions asked, no quarter given. All you need on your computer is a printer driver based on the JetDirect protocol and configured to output to the SmartMatrix's IP address. This is very simple to [set up on Linux using lpadmin](https://medium.com/machina-speculatrix/networking-a-dot-matrix-printer-eeda870f5728). Then, from that Linux box, assuming you've named the driver something like 'mx80' and you want to printer a file called 'myfile.txt', you enter on the command line:
 
 ```
@@ -14,7 +16,11 @@ You can also access this interface from any programs you write that want to, say
 
 **Serial interface**: Connect the Pico to your computer via a standard USB cable and it appears as a serial interface. If you fire up a terminal program such as Minicom, Coolterm or whatever people suffering under Windows use, and set it to 115,200 baud, 8N1, you'll find yourself talking to the command line interface (CLI) of the SmartMatrix. There's more information below.
 
+![Epson MX-80](img/SmartMatrix-CLI-session.png)Boot messages and response to the STAT command over the USB-serial connection.
+
 An I2C port is used for a small OLED screen (SSD1306).
+
+![Epson MX-80](img/SmartMatrix_OLED.jpg)The 0.96in OLED screen.
 
 ## SERIAL PORT
 
@@ -39,6 +45,8 @@ If you send the string `PRT` down the serial connection, any further bytes sent 
 This function is mostly meant for use with programs, but you can probably configure your terminal software to send an EOT (I did this using macros in Coolterm).
 
 As soon as the SmartMatrix gets the EOT, the serial connection switches back into the normal command line interface mode.
+
+![Epson MX-80](img/SmartMatrix_on_printer.jpg)The SmartMatrix on my beloved Epson MX-80. The white cable is just powering the board via USB.
 
 ## WIFI CONFIG
 
@@ -69,7 +77,13 @@ The credentials are stored in non-volatile memory, so you need to do this only w
 
 ## THE HARDWARE
 
-The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, some ICs used as level shifters and buffers/drivers, a 25-pin D-sub socket for the printer cable, a reset  button and a few blinkenlights. It is open source. Files, including a schematic, Gerbers, placement (Centroid) and a BOM for surface-mount parts, are in the SmartMatrix PCB folder.
+The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, some ICs used as level shifters and buffers/drivers, a 25-pin D-sub socket for the printer cable, a reset  button and a few blinkenlights. It is open source.
+
+Files, including a schematic, Gerbers, placement (Centroid) and a BOM for surface-mount parts, are in the SmartMatrix PCB folder.
+
+You can also download the files from [PCBway's Shared Projects platform](https://www.pcbway.com/project/shareproject/SmartMatrix_networked_parallel_printer_interface_1af07add.html), or order PCBs (with or without the PCB Assembly service) directly from the company.
+
+![Epson MX-80](img/SmartMatrix_PCB.jpg)The PCB. Add your own RPi Pico 2W and 25-pin D-sub connector.
 
 ### OLED
 
@@ -83,7 +97,7 @@ The SmartMatrix hardware device largely consists of the Raspberry Pi Pico 2W, so
 | 6    | SSID        |
 | 7    | IP address  |
 
-![Epson MX-80](img/MSpeculatrix_Epson_and_LCD.jpg)My Epson MX-80 and an earlier interface project.
+![Epson MX-80](img/SmartMatrix_rear_view.jpg)The four pins are the I2C port for the OLED.
 
 ### Signals
 
