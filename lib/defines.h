@@ -8,7 +8,7 @@
 
 #include "pico/multicore.h"
 
-#define VERSION_STR "Version 1.0.0"
+#define VERSION_STR "Version 1.0.1"
 
  /// @brief Standard JetDirect / RAW TCP printing port
 #define TCP_PORT 9100
@@ -35,8 +35,6 @@
 
 #define CHAR_LF         0x0A	// Linefeed
 #define CHAR_CR         0x0D	// Carriage return
-#define PRINTABLE_START 0x20 	// Lowest value ASCII char considered printable
-#define PRINTABLE_END   0x7E 	// Highest value ASCII char considered printable
 
 /**
  * @brief Bitmask restricting data writes strictly to GPIO 0 through 7.

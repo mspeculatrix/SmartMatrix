@@ -75,13 +75,13 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 			} else if (strncmp(sys->cmd_buffer, "RESET", length) == 0) {
 				// Request to reset the printer (not the SmartMatrix)
 				if (sys->system_status == STATUS_IDLE) {
-					printf("> Resetting...\n");
+					printf(": Resetting... ");
 					gpio_put(ACTIVITY_LED_PIN, 1);
 					gpio_put(INIT_PIN, 0);
 					sleep_ms(RESET_DURATION);
 					gpio_put(INIT_PIN, 1);
 					gpio_put(ACTIVITY_LED_PIN, 0);
-					printf("> PRINTER RESET\n");
+					printf("PRINTER RESET\n");
 				} else {
 					printf("! ERR: Printer busy or offline.\n");
 				}
@@ -92,7 +92,7 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 					sys->serial_mode = STATE_PRINTING;
 					printf("RDY\n");                 // Acknowledgement message
 				} else {
-					printf("ERR: Printer not available.\n");
+					printf("! ERR: Printer not available.\n");
 				}
 
 			} else if (strncmp(sys->cmd_buffer, "CONN", length) == 0) {
@@ -123,14 +123,14 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 
 			} else if (strncmp(sys->cmd_buffer, "AF_ON", length) == 0) {
 				// Request to turn Autofeed on
-				printf("> AUTOFEED ON\n");
+				printf(": AUTOFEED ON\n");
 				sys->autofeed_cfg = AF_ON;
 				gpio_put(AUTOFEED_PIN, sys->autofeed_cfg);
 				display_AF(sys);
 
 			} else if (strncmp(sys->cmd_buffer, "AF_OFF", length) == 0) {
 				// Request to turn Autofeed off
-				printf("> AUTOFEED OFF\n");
+				printf(": AUTOFEED OFF\n");
 				sys->autofeed_cfg = AF_OFF;
 				display_AF(sys);
 				gpio_put(AUTOFEED_PIN, sys->autofeed_cfg);
@@ -145,7 +145,7 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 			// On this pass, the string is assumed to be the wifi SSID
 			strncpy(net->wifi_ssid, sys->cmd_buffer, sizeof(net->wifi_ssid) - 1);
 			net->wifi_ssid[sizeof(net->wifi_ssid) - 1] = '\0'; // Ensure null
-			printf("> SSID set to: %s\n", net->wifi_ssid);
+			printf(": SSID set to: %s\n", net->wifi_ssid);
 			save_wifi_credentials(net); 		// Persist update
 			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
@@ -155,14 +155,14 @@ void handle_command(SystemContext* sys, NetworkContext* net) {
 			// On this pass, the string is assumed to be the wifi password
 			strncpy(net->wifi_passwd, sys->cmd_buffer, sizeof(net->wifi_passwd) - 1);
 			net->wifi_passwd[sizeof(net->wifi_passwd) - 1] = '\0';
-			printf("> Password updated.\n");
+			printf(": Password updated.\n");
 			save_wifi_credentials(net); 		// Persist update
 			command_mode = CMD_COMMAND;			// Switch back to default mode
 			break;
 
 		default:
 			// For now just do nothing. We should never get here.
-			printf("ERR: Unexpected command mode!\n");
+			printf("! ERR: Unexpected command mode!\n");
 			break;
 	}
 	sys->cmd_idx = 0;
@@ -208,21 +208,22 @@ void process_fifo_message(SystemContext* sys,
 void process_usb_byte(SystemContext* sys, NetworkContext* net, uint8_t byte) {
 	// A byte has come in via the USB-serial port. Let's decide what to do
 	// with it.
+
+	// Are we currently in printing mode for the serial connection?
 	if (sys->serial_mode == STATE_PRINTING) {
 
 		if (byte == PRT_MODE_END) {    // Code indicating end of print mode
 			sys->serial_mode = STATE_COMMAND;	// Switch back to normal mode
 			sys->cmd_idx = 0;					// Reset command index
-			printf("\n> EXIT PRINT MODE\n");
+			printf("\n: EXITING PRINT MODE\n");
 		} else {
 			// Forward raw USB print byte to Core 1 via FIFO
-			if (byte >= PRINTABLE_START && byte <= PRINTABLE_END) {
-				send_print_byte_to_core1(byte);
-			}
+			send_print_byte_to_core1(byte);
 		}
 
-	} else if (sys->serial_mode == STATE_COMMAND) { 	// The normal state
-
+		// } else if (sys->serial_mode == STATE_COMMAND) { 	// The normal state
+	} else {
+		// Otherwise we're in the normal STATE_COMMAND mode
 		switch (byte) {
 			case CHAR_CR:
 				// Do nothing. We're going to ignore carriage returns
