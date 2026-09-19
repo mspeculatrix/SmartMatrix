@@ -108,8 +108,9 @@ void core1_entry() {
 				uint8_t print_byte = (uint8_t)(incoming_msg & 0xFF);
 
 				// Manage job statistics and status messaging on Core 1
-				// direct execution
 				if (!sys_ctx->is_printing) {
+					// We're not currently printing, so this is the start
+					// of a print job
 					sys_ctx->is_printing = true;
 					sys_ctx->total_job_bytes = 0;
 					send_fifo_msg(FIFO_MSG_JOB_START, 0);
@@ -119,8 +120,8 @@ void core1_entry() {
 				send_byte_to_printer(print_byte);
 				sys_ctx->total_job_bytes++;
 
-				// Notify Core 0 every 100 bytes to update the OLED display
-				if (sys_ctx->total_job_bytes % 100 == 0) {
+				// Notify Core 0 every 10 bytes to update the OLED display
+				if (sys_ctx->total_job_bytes % 10 == 0) {
 					send_fifo_msg(FIFO_MSG_BYTE_COUNT,
 						sys_ctx->total_job_bytes);
 				}

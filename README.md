@@ -1,5 +1,9 @@
 # SMARTMATRIX
 
+Author: Steve Mansfield-Devine (Machina Speculatrix) https://medium.com/machina-speculatrix
+
+NB: This software is made available 'as is'. I offer no guarantees, warranties or promises of any kind. Use it for your own pleasure and at your own risk.
+
 This is firmware for the Raspberry Pi Pico 2W-based **SmartMatrix** adapter. This uses the microcontroller to convert serial or network input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III.
 
 ![Epson MX-80](img/SmartMatrix_front_view.jpg)The SmartMatrix board.
@@ -34,7 +38,7 @@ Via this terminal, you can issue a number of commands. Currently we have:
 - `SSID` : to configure the SSID setting for the wifi.
 - `PASSWD` : to configure the password for the wifi.
 - `CONN` : to initiate a wifi connection.
-- `AF_ON` : to turn on the Autofeed setting (the default is off).
+- `AF_ON` : to turn on the Autofeed setting (default is off).
 - `AF_OFF` : to turn off the Autofeed setting.
 - `PRT` : to enter serial printing mode (see below).
 
@@ -87,19 +91,23 @@ You can also download the files from [PCBway's Shared Projects platform](https:/
 
 ### OLED
 
-| Line | Function    |
-|:----:| ----------- |
-| 0, 1 | State       |
-| 2    |             |
-| 3    | Bytes: num  |
-| 4    |        num  |
-| 5    | AF setting  |
-| 6    | SSID        |
-| 7    | IP address  |
+The display has 8 rows (pages). Normal-size text fits in a single row. Double-size text takes two rows.
+
+| Line | Function    | Note                                  |
+|:----:| ----------- | ------------------------------------- |
+| 0, 1 | State       | Top 2 pages used for double-size text |
+| 2    |             | -- blank --                           |
+| 3    | Bytes: num  | Number is double-size text            |
+| 4    |        num  | -- blank --                           |
+| 5    | AF setting  | Autofeed state                        |
+| 6    | SSID        | Wifi                                  |
+| 7    | IP address  | Network IP for Pico                   |
 
 ![Epson MX-80](img/SmartMatrix_rear_view.jpg)The four pins are the I2C port for the OLED.
 
 ### Signals
+
+Standard signals on a 25-pin D-sub connector.
 
 | **Pin** | **Function** | **Host** | **Def** | **Cntl by** | **Note** |
 | :---: | :---: | :---: | :---: | :---: | --- |
@@ -119,6 +127,17 @@ On the MX-80, DIP switch 2-3 can be used to 'fix' the `/AUTOFEED` setting. Facto
 
 When `/AUTOFEED` is LOW, the printer will automatically issue a linefeed when it receives a carriage return. The DIP switch setting on the Epson is ORed with the signal on line 14. So if the DIP switch is set to OFF, the line is pulled high and then the host can either allow this to remain high (Autofeed disabled) or take it low (Autofeed enabled). If the DIP switch is set to ON, Autofeed is always disabled.
 
+## LIFE WITH A DOT MATRIX PRINTER
+
+This project is the culmination of a number of projects all based around making good use of the Epson MX80 F/T-III dot matric printer I bought in the early 1980s and which is still working. I've documented these projects in a number of articles on Machina Speculatrix (Medium subscription required):
+
+- [**Getting to grips with the parallel interface**](https://medium.com/machina-speculatrix/getting-to-grips-with-the-parallel-interface-cfab79c8a7b8) : Putting an old printer back into use meant talking the language of its now (mostly) obsolete interface. 28/02/2025.
+- [**Life with a dot matrix printer**](https://medium.com/machina-speculatrix/life-with-a-dot-matrix-printer-ae4d89153b90) : There’s something charming about old technology, especially if you can find a use for it. 05/06/2026.
+- [**Networking a dot matrix printer**](https://medium.com/machina-speculatrix/networking-a-dot-matrix-printer-eeda870f5728) : Nothing adds more value to resources like printers than being able to share them. 12/06/2026.
+- [**SmartMatrix: A Raspberry Pi Pico parallel printer interface**](https://medium.com/machina-speculatrix/smartmatrix-a-raspberry-pi-pico-parallel-printer-interface-a771d79b1975) : This simple board makes an ancient dot matrix printer available to modern devices across the whole network. 13/08/2026.
+- [**A simple OLED driver in C for the Raspberry Pi Pico**](https://medium.com/machina-speculatrix/a-simple-oled-driver-in-c-for-the-raspberry-pi-pico-929d77d9a08a) : OLED panels are cute, crisp and very versatile. And they are surprisingly easy to program yourself, if your aims are modest. 10/09/2026.
+- [**SmartMatrix finale: a wifi-enabled parallel printer server with OLED**](https://medium.com/machina-speculatrix/smartmatrix-finale-a-wifi-enabled-parallel-printer-server-with-oled-8383c97e5494) : My odyssey to find the perfect solution for using an old dot matrix printer has finally reached its destination. 18/09/2026.
+
 ## VERSION HISTORY
 
 Dates indicate when the dev branch was merged into main.
@@ -129,40 +148,4 @@ Dates indicate when the dev branch was merged into main.
 
 ### 1.0.0 05/09/2026
 
-- Refactored most functions to use system and network context structs.
-
-### 0.9.2 04/09/2026
-
-- Changed serial connection so that it operates by default in CLI/command mode.
-- Created CLI commands to configure wifi, make connection etc.
-- Added functionality to save wifi credentials to non-volatile memory.
-- Moved many functions out to library files.
-- Tested on SmartMatrix B2 board. All seems tickety-boo.
-
-### 0.9.0 26/08/2026
-
-- Changed function of user LEDs.
-  - LED A flashes when data is sent to the printer.
-  - LED B now indicates a successful Wifi connection.
-- Added OLED functions & 'telemetry' messages via SIO FIFO.
-
-### 0.5.0 19/08/2026
-
-- Fixed an incorrect default signal setting.
-- Tested printing over network via socket connection - works a treat.
-
-### 0.1 14/08/2026
-
-- Wifi works. It usually connects on the second attempt.
-- Serial via USB works. Why wouldn't it?
-- The direct mode of sending bytes over the serial connection and having them print immediately on the printer works.
-- Nothing else has been tested.
-
-## LIFE WITH A DOT MATRIX PRINTER
-
-This project is the culmination of a number of projects all based around making good use of the Epson MX80 F/T-III dot matric printer I bought in the early 1980s and which is still working. I've documented these projects in a number of articles on Machina Speculatrix (Medium subscription required):
-
-- [**Getting to grips with the parallel interface**](https://medium.com/machina-speculatrix/getting-to-grips-with-the-parallel-interface-cfab79c8a7b8) : Putting an old printer back into use meant talking the language of its now (mostly) obsolete interface. 28/02/2025.
-- [**Life with a dot matrix printer**](https://medium.com/machina-speculatrix/life-with-a-dot-matrix-printer-ae4d89153b90) : There’s something charming about old technology, especially if you can find a use for it. 05/06/2026.
-- [**Networking a dot matrix printer**](https://medium.com/machina-speculatrix/networking-a-dot-matrix-printer-eeda870f5728) : Nothing adds more value to resources like printers than being able to share them. 12/06/2026.
-- [**SmartMatrix: A Raspberry Pi Pico parallel printer interface**](https://medium.com/machina-speculatrix/smartmatrix-a-raspberry-pi-pico-parallel-printer-interface-a771d79b1975) : This simple board makes an ancient dot matrix printer available to modern devices across the whole network. 13/08/2026.
+- First fully functional version.
