@@ -32,7 +32,7 @@ You will need to add your own Raspberry Pi Pico 2W, a right-angle, female 25-pin
 
 ## WEBSERVER
 
-This project also includes a containerised webserver to act as a front end for printing files. The the `webserver` folder.
+This project also includes a containerised webserver to act as a front end for printing files. It's in the `webserver` folder, which can be moved anywhere you want it - it doesn't need to stay in the project tree.
 
 ## LIFE WITH A DOT MATRIX PRINTER
 
