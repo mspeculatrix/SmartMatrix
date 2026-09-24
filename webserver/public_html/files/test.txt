@@ -1,0 +1,15 @@
+123456789!123456789!123456789!123456789!123456789!123456789!123456789!123456789!
+Test file for the MX-80 printer.
+ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
+!@#$%^&*()_+-=[]{};'\:"|,./<>?`~
+
+{tabbed text}
+func printFile(filepath string) string {
+	err := cmd.Run()
+	if err != nil {
+		response = err.Error()
+	}
+	return response
+}
+
++END+

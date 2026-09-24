@@ -1,0 +1,10 @@
+/*	site.css */
+
+td.centered, th.centered {
+	text-align:center;
+}
+
+
+div.returnlink {
+	padding-top: 20px;
+}

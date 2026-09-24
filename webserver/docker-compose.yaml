@@ -1,0 +1,13 @@
+---
+
+services:
+  # Webserver - Apache & PHP
+  http:
+    container_name: printsvr
+    image: printsvr-apache-php
+    build: ./images/printsvr-http
+    restart: unless-stopped
+    volumes:
+      - ./public_html:/var/www/html
+    ports:
+      - 8989:80

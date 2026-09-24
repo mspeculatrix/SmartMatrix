@@ -1,0 +1,8 @@
+    The danger is in a particular location.
+    It increases towards a center...
+        ...the center of danger is here...
+    of a particular size and shape, and below us.
+
+
+
+.

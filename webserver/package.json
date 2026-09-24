@@ -1,0 +1,14 @@
+{
+  "name": "printsvr",
+  "version": "1.0.0",
+  "description": "SmartMatrix Printer Server",
+  "main": "index.js",
+  "scripts": {
+    "sass": "sass -w scss/main.scss public_html/css/main.css"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "node-sass": "^8.0.0"
+  }
+}

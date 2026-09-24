@@ -1,0 +1,190 @@
+// main.scss
+
+@use "sass:color";
+@use "sass:meta";
+
+@use 'config';		// variables
+// See the end of the file for the import file that makes the design responsive.
+
+@font-face {
+    font-family: "DotMatrix";
+    src: url("/assets/fonts/imgwriter-draft.ttf")
+}
+
+@font-face {
+    font-family: "SyneMono";
+    src: url("/assets/fonts/SyneMono-Regular.ttf")
+}
+
+@font-face {
+    font-family: "NotoSans";
+    src: url("/assets/fonts/NotoSans-Medium.ttf")
+}
+
+@font-face {
+    font-family: "NotoSansMono";
+    src: url("/assets/fonts/NotoSansMono-Medium.ttf")
+}
+
+* {
+    box-sizing: border-box;
+}
+
+a {
+    text-decoration: none;
+    color: config.$a-link;
+    &:link { color: config.$a-link; }
+    &:visited { color: config.$a-visited; }
+    &:hover {
+        color: config.$a-hover;
+        @include config.easeInOut;
+    }
+    &:active { color: config.$a-active; }
+}
+
+body {
+    color: config.$fg-primary;
+    background-color: config.$bg-primary;
+    font-family: config.$font-main;
+    height: 100%;
+    margin:0;
+}
+
+button {
+    font-family: config.$font-button;
+    text-align: center;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+    background: #922;
+    color: #ccc;
+    padding: 0 20px;
+    &.on {
+        background: #292;
+        color: white;
+    }
+    &.pressed {
+        background: #292;
+        color: white;
+    }
+    &.ctrlBtn {
+        margin: 5px auto;
+        background: #aca;
+        min-width: 120px;
+        color: #222;
+        &.modeBtn {
+            min-width: 150px;
+        }
+        &.active {
+            background: #802608;
+            color: #eee;
+        }
+        &.pushed {
+            background: #ebb66c;
+            color: #111;
+        }
+    }
+    &.fileBtn {
+        color: #000;
+        background: #fbf4d8;
+        font-family: config.$font-dm;
+        font-size: 2em;
+        margin: 10px;
+        min-width: 100px;
+    }
+}
+
+div {
+    &.content {
+	    background-image: url(/img/greenbarpaper.png);
+	    background-size:cover;
+	    min-height: 500px;
+    }
+    &.ctrl {
+        text-align: center;
+        margin: 0 auto;
+    }
+    &#masthead {
+        padding: 10px 0;
+    }
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: config.$hdg-color;
+    font-family: config.$font-header;
+    font-weight: 400;
+}
+
+h1 {
+    font-size: 2rem;
+    &#pagehead {
+        text-align: center;
+        margin: 10px auto 20px auto;
+        letter-spacing: 0.1em;
+        font-size: 1.2rem;
+    }
+}
+
+header {
+    position: fixed;
+    z-index: 4;
+    width: 100%;
+}
+
+img {
+    opacity: 1;
+    &.mx80img {
+        margin: 0 auto;
+    }
+}
+
+main {
+    padding: 1rem 4rem;
+}
+
+p {
+    &.cfg {
+        text-align: center;
+        margin: 5px auto;
+        font-family: config.$font-dm;
+        font-size: 1.5em;
+    }
+    &.msg {
+      font-family: config.$font-msg;
+      font-size: 2.2em;
+      color: rgb(26, 87, 13);
+      margin: 0 auto; padding: 0;
+      text-align: center;
+      &.ERR {
+        color: red;
+      }
+    }
+  }
+
+small {
+    font-size: 0.7em;
+}
+
+// ----- ID ELEMENTS -----------------------------------------------------------
+
+#ctrls {
+    text-align: center;
+}
+
+// ----- CLASSES ---------------------------------------------------------------
+
+.centreCol {
+    position: relative;
+    text-align:center;
+    margin: 0 auto;
+}
+
+.centered {
+    text-align:center;
+}
+
+.hide {
+    opacity: 0 !important;
+}
+
+@include meta.load-css('responsive');

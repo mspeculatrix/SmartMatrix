@@ -1,0 +1,34 @@
+@use 'config';
+
+// Widescreens
+@include config.mediaXl {
+
+}
+
+// Desktops & Laptops
+@include config.mediaLg {
+}
+
+// Standard
+@include config.mediaStd {
+	main {
+		align-items: center;
+		padding: 2rem 4rem;
+	}
+}
+
+// Tablets & Small Laptops
+@include config.mediaMd {
+	main {
+		align-items: center;
+		padding: 2rem 4rem;
+	}
+
+}
+
+// Smartphones
+@include config.mediaSm {
+	main {
+		padding: 2rem;
+	}
+}
