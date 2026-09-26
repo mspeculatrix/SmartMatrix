@@ -1,0 +1,28 @@
+unc main() {
+
+	// HTTP SERVER
+	go web.HandleHTTPRequests()
+
+	// SOCKET SERVER
+	// Start socket server listening
+	listener, err := net.Listen(cfg.SCK_PROTO, ":"+cfg.SCK_PORT)
+	if err != nil {
+		fmt.Println("Error listening:", err.Error())
+		os.Exit(1)
+	}
+	defer listener.Close()
+
+	/*
+		Run loop to accept incoming connections. Each connection has its own
+		lifespan within an individual SocketHandler() function,
+		run as a go routine.
+	*/
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Fatalln(err)
+			return
+		}
+		go sck.SocketHandler(conn)
+	}
+}

@@ -76,20 +76,14 @@ $svrconfig = readCfgFile('printsvr.cfg');
 			</div>
 
 			<div class="row">
-				<p id="result" class="msg">
-					<?php
-					if (array_key_exists('r', $_REQUEST)) {
-						echo $_REQUEST['r'];
-					}
-					?>
-				</p>
+				<p id="result" class="msg"></p>
 			</div>
 
 			<div class="row">
 				<p class="cfg">SmartMatrix IP: <span id="cfg_ip">
-						<?php echo $svrconfig['smartmatrix_ip']; ?> Port:
-						<span id="cfg_port"><?php echo $svrconfig['smartmatrix_port']; ?></span>
-					</span></p>
+						<?php echo $svrconfig['smartmatrix_ip']; ?></span> Port:
+					<span id="cfg_port"><?php echo $svrconfig['smartmatrix_port']; ?></span>
+				</p>
 			</div>
 
 		</div><!-- #mainSection -->

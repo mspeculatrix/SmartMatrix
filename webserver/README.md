@@ -2,6 +2,15 @@
 
 This very simple website is intended to serve as a front end for the SmartMatrix parallel printer device.
 
+Imagine you're lying on the sofa in your living room, with your laptop (no cables attached). A dot matrix printer with the SmartMatrix attached is in another room, connected to the network via wifi. Printing a file involves the following steps:
+
+- You click on a desktop icon that is a shortcut to a folder. This opens a file browser window for that folder.
+- You drag and drop the file into it.
+- You go to your web browser and point it at http://localhost. A page appears with the names of all the files in that folder.
+- You click on the button with the file’s name and then on ‘OK’ when asked if you really want to print it.
+
+That’s it.
+
 You can run this on your laptop/desktop to allow you to print files on that machine. Or you can run it on a home server, accessible by multiple machines over the network. In the latter case, however, the `public_html/files/` directory needs to be accessible and writable over the network, too. You could try setting up an SMB or NFS share and converting the `public_html/files/` directory into a symlink to it.
 
 It's pretty straightforward. The webpage includes JavaScript that responds to button clicks by sending GET requests to `apiserver.php`. This takes appropriate actions - in most cases by using a raw socket connection to the SmartMatrix to send bytes.
@@ -22,7 +31,7 @@ By default, the SmartMatrix port is `9100`, unless you have changed it in the fi
 
 The site runs using Docker. You can put the webserver folder anywhere on your system - eg, in the place you like to keep Docker projects.
 
-The container is not entirely self-contained. The Apache `/var/www/html/` inside the container is mapped to the `public_html/` folder. That makes it considerably easier to work on the site. It also makes the `public_html/files/` folder more accessible.
+The container is not entirely self-contained. The Apache `/var/www/html/` inside the container is mapped externally to the `public_html/` folder. That makes it considerably easier to work on the site. It also makes the `public_html/files/` folder accessible from outside the container. Many fundamentalist containerists will abhor this approach. I don't care.
 
 Assuming your user is part of the `docker` group and you have all the necessary Docker stuff installed, then in a terminal `cd` to the webserver directory (wherever you put it) and run:
 

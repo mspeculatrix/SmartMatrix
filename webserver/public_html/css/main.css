@@ -141,8 +141,8 @@ p.cfg {
   font-size: 1.5em;
 }
 p.msg {
-  font-family: "DotMatrix", "VT323", "Gill Sans", Calibri, "Trebuchet MS", sans-serif;
-  font-size: 2.2em;
+  font-family: "DotMatrix", "EnigmaSans", "Courier New", Courier, monospace;
+  font-size: 1.8em;
   color: rgb(26, 87, 13);
   margin: 0 auto;
   padding: 0;

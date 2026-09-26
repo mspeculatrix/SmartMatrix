@@ -1,0 +1,19 @@
+[2449537.266204] kernel: br-5864efc0328f: port 2(veth6977a2e) entered blocking state
+[2449537.266213] kernel: br-5864efc0328f: port 2(veth6977a2e) entered forwarding state
+[2449537.266271] kernel: IPv6: ADDRCONF(NETDEV_CHANGE): br-5864efc0328f: link becomes ready
+[2449537.266466] kernel: br-5864efc0328f: port 2(veth6977a2e) entered disabled state
+[2449537.299802] kernel: eth0: renamed from veth5d00b6b
+[2449537.313028] kernel: eth0: renamed from veth2883c0e
+[2449537.329991] kernel: IPv6: ADDRCONF(NETDEV_CHANGE): vethad9dff0: link becomes ready
+[2449537.330099] kernel: br-5864efc0328f: port 1(vethad9dff0) entered blocking state
+[2449537.330104] kernel: br-5864efc0328f: port 1(vethad9dff0) entered forwarding state
+[2449537.330298] kernel: IPv6: ADDRCONF(NETDEV_CHANGE): veth6977a2e: link becomes ready
+[2449537.330349] kernel: br-5864efc0328f: port 2(veth6977a2e) entered blocking state
+[2449537.330353] kernel: br-5864efc0328f: port 2(veth6977a2e) entered forwarding state
+[2449538.019172] kernel: br-5864efc0328f: port 3(veth976289e) entered blocking state
+[2449538.019182] kernel: br-5864efc0328f: port 3(veth976289e) entered disabled state
+[2449538.019358] kernel: device veth976289e entered promiscuous mode
+[2449538.029588] kernel: br-5864efc0328f: port 3(veth976289e) entered blocking state
+[2449538.029597] kernel: br-5864efc0328f: port 3(veth976289e) entered forwarding state
+[2449538.405100] kernel: eth0: renamed from vethf35a420
+[2449538.429560] kernel: IPv6: ADDRCONF(NETDEV_CHANGE): veth976289e: link becomes ready

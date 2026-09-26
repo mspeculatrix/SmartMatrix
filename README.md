@@ -6,7 +6,7 @@ Current version: 1.0.1
 
 NB: This software is made available 'as is'. I offer no guarantees, warranties or promises of any kind. Use it for your own pleasure and at your own risk.
 
-This is firmware for the Raspberry Pi Pico 2W-based **SmartMatrix** adapter. This uses the microcontroller to convert serial or network input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III.
+This is firmware for the Raspberry Pi Pico 2W-based **SmartMatrix** adapter. This uses the microcontroller to convert serial or wireless network input to parallel output for printing to a dot matrix printer - in my case an Epson MX-80 F/T III - or other printers with standard Centronics interfaces.
 
 ![Epson MX-80](img/SmartMatrix_front_view.jpg)The SmartMatrix board.
 
@@ -32,7 +32,7 @@ You will need to add your own Raspberry Pi Pico 2W, a right-angle, female 25-pin
 
 ## WEBSERVER
 
-This project also includes a containerised webserver to act as a front end for printing files. It's in the `webserver` folder, which can be moved anywhere you want it - it doesn't need to stay in the project tree.
+This project also includes a containerised web server to act as a front end for printing files. It's in the `webserver` folder, which can be moved anywhere you want it - it doesn't need to stay in the project tree.
 
 ## LIFE WITH A DOT MATRIX PRINTER
 

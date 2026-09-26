@@ -43,3 +43,7 @@ If you send the string `PRT` down the serial connection, any further bytes sent 
 This function is mostly meant for use with programs, but you can probably configure your terminal software to send an EOT (I did this using macros in Coolterm). That way you can turn the SmartMatrix into the world's most inconvenient typewriter.
 
 As soon as the SmartMatrix gets the EOT, the serial connection switches back into the normal command line interface mode.
+
+## Web frontend
+
+For the separate web frontend project (included in this repo) see the `webserver` directory.

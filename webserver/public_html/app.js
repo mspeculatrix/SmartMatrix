@@ -156,9 +156,5 @@ window.addEventListener('DOMContentLoaded', () => {
 		sendCode('init', initBtn, result)
 	})
 
-	setTimeout(() => {
-        result.classList.add('hide')
-    }, 5000)
-
 	makeFileBtnsClickable()
 })

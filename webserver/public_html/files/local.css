@@ -1,0 +1,18 @@
+/*	local.css */
+
+p {
+    &.cfg {
+        text-align: center;
+        margin: 5px auto;
+        font-size: 1.5em;
+    }
+    &.msg {
+      font-size: 1.8em;
+      color: rgb(26, 87, 13);
+      margin: 0 auto; padding: 0;
+      text-align: center;
+      &.ERR {
+        color: red;
+      }
+    }
+  }
