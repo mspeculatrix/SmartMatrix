@@ -1,5 +1,7 @@
 # SmartMatrix Webserver
 
+## Version 1.0.1
+
 This very simple website is intended to serve as a front end for the SmartMatrix parallel printer device.
 
 Imagine you're lying on the sofa in your living room, with your laptop (no cables attached). A dot matrix printer with the SmartMatrix attached is in another room, connected to the network via wifi. Printing a file involves the following steps:
@@ -69,3 +71,9 @@ If you don't want to mess with the CSS, you can ignore this folder.
 If you're happy to directly edit the `public_html/css/main.css` file, you can also ignore this folder (although you will want to delete the `public_html/css/main.css.map` file).
 
 If you're a SASS fan, you know what to do.
+
+## CHANGE LOG
+
+### 1.0.1
+
+Changed the API route for printing files from `/pf&f=<filename>` to `/pf/filename` to maintain compatibility with Go-based API.

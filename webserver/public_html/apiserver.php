@@ -72,6 +72,7 @@ function send_to_smartmatrix(string $data, int $timeout_sec = 3): int
 	return $bytes_written;
 }
 
+
 // -----------------------------------------------------------------------------
 // ROUTE HANDLING
 // -----------------------------------------------------------------------------
@@ -79,10 +80,25 @@ function send_to_smartmatrix(string $data, int $timeout_sec = 3): int
 $uri = $_SERVER['REQUEST_URI'];
 $path = parse_url($uri, PHP_URL_PATH);
 
-// ROUTE: /filelist - List printable files in designated folder
-if (strpos($path, '/filelist') !== false) {
+// Strip '/apiserver.php' prefix if present so routes match correctly
+if (strpos($path, '/apiserver.php') === 0) {
+	$path = substr($path, strlen('/apiserver.php'));
+}
+
+// Guarantee path has at least a leading slash if empty
+if (empty($path)) {
+	$path = '/';
+}
+
+// ROUTE: FILE LIST
+// /filelist - List printable files in designated folder
+if ($path === '/filelist') {
 	if (!is_dir(FILES_DIR)) {
-		echo json_encode(['status' => 'ERROR', 'result' => 'Files directory missing']);
+		echo json_encode([
+			'status' => 'ERROR',
+			'result' => 'Files directory missing',
+			'bytes' => 0
+		]);
 		exit;
 	}
 
@@ -93,16 +109,17 @@ if (strpos($path, '/filelist') !== false) {
 
 	echo json_encode([
 		'status' => 'OK',
-		'result'  => $files
+		'result' => $files,
+		'bytes'  => 0
 	]);
 	exit;
 }
 
-// ROUTE: /pf?f=filename - Print a full file
-if (strpos($path, '/pf') !== false) {
-	$filename = $_GET['f'] ?? '';
-	// Sanitize filename to prevent directory traversal
-	$filename = basename($filename);
+// ROUTE: PRINT FILE
+// /pf/<filename> - Print a full file
+if (preg_match('#^/pf/(.+)#', $path, $matches)) {
+	$raw_filename = urldecode($matches[1]);
+	$filename = basename($raw_filename);
 	$filepath = FILES_DIR . $filename;
 
 	if (empty($filename) || !file_exists($filepath)) {
@@ -124,21 +141,22 @@ if (strpos($path, '/pf') !== false) {
 	if ($bytes_sent > 0) {
 		echo json_encode([
 			'status' => 'OK',
-			'result' => 'Sent ' . $filename	. ' to printer',
-			'bytes' => $bytes_sent
+			'result' => 'Sent ' . $filename . ' to printer',
+			'bytes'  => $bytes_sent
 		]);
 	} else {
 		echo json_encode([
 			'status' => 'ERR',
 			'result' => 'Printer connection failed',
-			'bytes' => 0
+			'bytes'  => 0
 		]);
 	}
 	exit;
 }
 
-// ROUTE: /cmd/{code} - Control codes and state queries
-if (preg_match('#/cmd/([a-zA-Z0-9_-]+)#', $path, $matches)) {
+// ROUTE: COMMAND
+// /cmd/{code} - Control codes and state queries
+if (preg_match('#^/cmd/([a-zA-Z0-9_-]+)#', $path, $matches)) {
 	$cmd = strtolower($matches[1]);
 
 	$response = ['status' => 'none', 'result' => 'fault', 'bytes' => 0];
@@ -146,92 +164,61 @@ if (preg_match('#/cmd/([a-zA-Z0-9_-]+)#', $path, $matches)) {
 	$offline_error = [
 		'status' => 'ERR',
 		'result' => 'Printer offline',
-		'bytes' => 0
+		'bytes'  => 0
 	];
 
 	switch ($cmd) {
 		case 'lf':
 			$bytes_sent = send_to_smartmatrix(BYTE_LF);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Line feed sent',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Line feed sent', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
+
 		case 'ff':
 			$bytes_sent = send_to_smartmatrix(BYTE_FF);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Form feed sent',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Form feed sent', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		case 'init':
 			$bytes_sent = send_to_smartmatrix(BYTE_INIT);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Printer reset',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Printer reset', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		case 'condon':
 			$bytes_sent = send_to_smartmatrix(BYTE_COND_ON);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Condensed mode ON',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Condensed mode ON', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		case 'condoff':
 			$bytes_sent = send_to_smartmatrix(BYTE_COND_OFF);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Condensed mode OFF',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Condensed mode OFF', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		case 'emphon':
 			$bytes_sent = send_to_smartmatrix(BYTE_EMPH_ON);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Emphasized mode ON',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Emphasized mode ON', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		case 'emphoff':
 			$bytes_sent = send_to_smartmatrix(BYTE_EMPH_OFF);
 			$response = $bytes_sent > 0
-				? [
-					'status' => 'OK',
-					'result' => 'Emphasized mode OFF',
-					'bytes' => $bytes_sent
-				]
+				? ['status' => 'OK', 'result' => 'Emphasized mode OFF', 'bytes' => $bytes_sent]
 				: $offline_error;
 			break;
 
 		default:
-			$response = [
-				'status' => 'ERR',
-				'result' => 'Unknown command',
-				'bytes' => 0
-			];
+			$response = ['status' => 'ERR', 'result' => 'Unknown command', 'bytes' => 0];
 			break;
 	}
 	echo json_encode($response);
@@ -242,5 +229,5 @@ if (preg_match('#/cmd/([a-zA-Z0-9_-]+)#', $path, $matches)) {
 echo json_encode([
 	'status' => 'ERR',
 	'result' => 'Invalid endpoint',
-	'bytes' => 0
+	'bytes'  => 0
 ]);

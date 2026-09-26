@@ -8,7 +8,7 @@ var emphasised = false
 function confirmPrint(filename) {
 	let conf = confirm("Are you sure you want to print " + filename + "?");
 	if (conf === true) {
-		fetch(PRT_API + "/pf?f=" + filename)
+		fetch(PRT_API + "/pf/" + encodeURIComponent(filename))
 			.then((response) => response.json())
 			.then((json) => {
 				updateResultMsg(json['status'], json['result'], json['bytes'])
@@ -104,7 +104,7 @@ function updateFileList() {
 			filelistDiv.innerHTML = fileListBtns.join("\n")
 			makeFileBtnsClickable()
 		}
-		updateResultMsg(filejson['status'], 'file list', 0)
+		updateResultMsg(filejson['status'], 'file list received', 0)
 	})
 	filelistDiv.style.opacity = "1.0"
 }
