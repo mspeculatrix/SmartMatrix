@@ -24,7 +24,7 @@ $svrconfig = readCfgFile('printsvr.cfg');
 	<script src="/js/jquery-3.3.1.min.js"></script> <!-- for FontAwesome -->
 	<script src="/js/bootstrap.js"></script>
 	<script src="/js/bootstrap.bundle.js"></script>
-	<script src="app.js"></script>
+	<script src="smartmatrix_webserver.js"></script>
 </head>
 
 <body>

@@ -34,6 +34,8 @@ You will need to add your own Raspberry Pi Pico 2W, a right-angle, female 25-pin
 
 This project also includes a containerised web server to act as a front end for printing files. It's in the `webserver` folder, which can be moved anywhere you want it - it doesn't need to stay in the project tree.
 
+![Web server](img/SmartMatrix-web.jpg)
+
 ## LIFE WITH A DOT MATRIX PRINTER
 
 This project is the culmination of a number of projects all based around making good use of the Epson MX80 F/T-III dot matric printer I bought in the early 1980s and which is still working. I've documented these projects in a number of articles on Machina Speculatrix (Medium subscription required):

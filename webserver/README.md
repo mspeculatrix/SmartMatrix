@@ -13,6 +13,8 @@ Imagine you're lying on the sofa in your living room, with your laptop (no cable
 
 That’s it.
 
+![Web server](../img/SmartMatrix-web.jpg)
+
 You can run this on your laptop/desktop to allow you to print files on that machine. Or you can run it on a home server, accessible by multiple machines over the network. In the latter case, however, the `public_html/files/` directory needs to be accessible and writable over the network, too. You could try setting up an SMB or NFS share and converting the `public_html/files/` directory into a symlink to it.
 
 It's pretty straightforward. The webpage includes JavaScript that responds to button clicks by sending GET requests to `apiserver.php`. This takes appropriate actions - in most cases by using a raw socket connection to the SmartMatrix to send bytes.

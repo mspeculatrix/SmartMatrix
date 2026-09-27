@@ -1,4 +1,4 @@
-// app.js for webserver
+// smartmatrix_webserver.js for webserver
 
 const PRT_API = '/apiserver.php'
 var condensed = false
